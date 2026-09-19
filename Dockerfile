@@ -1,5 +1,12 @@
 # syntax=docker/dockerfile:1
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+# App image: code + fonts on top of the published icon base image (which already
+# carries the pictograms). Layers are shared, so code-only rebuilds do not
+# re-copy the ~338 MB icon set. To build without GHCR, build the base locally
+# from a checkout that has icons/ and point ICONS_IMAGE at it:
+#   docker build -f Dockerfile.icons -t arasaac-icons:de-500 .
+#   docker build --build-arg ICONS_IMAGE=arasaac-icons:de-500 -t arasaac-mcp .
+ARG ICONS_IMAGE=ghcr.io/aiexanderdicke/arasaac-icons:de-500
+FROM ${ICONS_IMAGE}
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -10,7 +17,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
-# Unprivileged user first, so COPY can use --chown.
+# Unprivileged user first, so COPY can use --chown. uid matches Dockerfile.icons.
 RUN useradd --create-home --uid 10001 app
 
 # Dependencies only.
@@ -23,9 +30,6 @@ COPY --chown=app:app assets/ ./assets/
 COPY --chown=app:app skills/ ./skills/
 COPY --chown=app:app scripts/prompt.md ./scripts/prompt.md
 RUN uv sync --frozen --extra mcp --no-dev
-
-# Pictograms last: 338 MB and rarely change.
-COPY --chown=app:app icons/ ./icons/
 
 # Debug renders served under /sheet/<name>.
 RUN mkdir -p /app/output && chown app:app /app/output

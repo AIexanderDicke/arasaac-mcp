@@ -1,0 +1,12 @@
+# syntax=docker/dockerfile:1
+# Icon base image: only the ~338 MB ARASAAC pictogram set. Published to GHCR
+# by .github/workflows/icons-image.yml (the one job that hits ARASAAC), then
+# used as the base of the app image so its layers are shared and never copied.
+
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+
+ENV ARASAAC_ICONS_DIR=/app/icons
+WORKDIR /app
+
+# Owned by uid 10001; the app image creates the matching unprivileged user.
+COPY --chown=10001:10001 icons/ /app/icons/

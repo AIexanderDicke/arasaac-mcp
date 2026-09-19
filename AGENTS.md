@@ -51,7 +51,8 @@ core.
 | `scripts/mcp_up.sh` | Start/restart relay + MCP server in tmux without killing the VS Code forwarded port |
 | `scripts/port_relay.py` | Stable TCP relay in front of the MCP server (keeps the forwarded port bound) |
 | `skills/arasaac-pictograms/` | **generated** Agent Skill (SKILL.md + `references/`); do not edit by hand |
-| `Dockerfile`, `docker-compose.yml`, `.dockerignore` | Self-contained image (code + fonts + 338 MB icons), no API key |
+| `Dockerfile`, `Dockerfile.icons`, `docker-compose.yml`, `.dockerignore` | App image (code + fonts) and the ~338 MB icon base image it is based on; no API key |
+| `.github/workflows/` | `docker.yml` builds the app image; `icons-image.yml` publishes the icon base image (the only job that hits ARASAAC) |
 | `examples/mcp.json` | MCP host config template (stdio) |
 | `scripts/download_icons.py` | Downloads the pictograms + `metadata_de.json` (stdlib only) |
 | `assets/fonts/NotoSans-*.ttf` | Umlaut-capable fonts for captions |
@@ -241,11 +242,21 @@ python scripts/build_skill.py --check   # fail if the skill is stale
 
 ### Docker
 
-The image bundles the code, fonts and the ~338 MB pictogram set, so it runs
-**offline** and needs **no API key**:
+Two images:
+
+- `Dockerfile.icons` → the **icon base image**
+  (`ghcr.io/aiexanderdicke/arasaac-icons:de-500`), which only adds the ~338 MB
+  pictogram set. It is published rarely by the `Icon base image` workflow — the
+  one job that downloads from ARASAAC.
+- `Dockerfile` → the **app image**, based on the icon image and adding code and
+  fonts. Layers are shared, so CI and code-only rebuilds never re-copy the
+  icons.
+
+The image bundles code, fonts and pictograms, so it runs **offline** and needs
+**no API key**:
 
 ```bash
-docker build -t arasaac-mcp .
+docker build -t arasaac-mcp .          # pulls the published icon base image
 docker run --rm -p 8000:8000 arasaac-mcp --transport http --host 0.0.0.0   # :8000/mcp
 docker run --rm -i arasaac-mcp --transport stdio                            # stdio
 docker compose up --build                                                   # HTTP + output volume
@@ -253,8 +264,16 @@ docker compose up --build                                                   # HT
 
 Compose sets transport/host/port via `ARASAAC_TRANSPORT` / `ARASAAC_HOST` /
 `ARASAAC_PORT` (CLI flags override). The container runs unprivileged with a
-writable `output` volume; pictograms sit in their own layer, so code-only
-rebuilds do not re-copy them.
+writable `output` volume.
+
+To build fully locally (no GHCR), build the base once from a checkout that has
+`icons/` and point the app build at it:
+
+```bash
+uv run python scripts/download_icons.py --lang de --size 500
+docker build -f Dockerfile.icons -t arasaac-icons:de-500 .
+docker build --build-arg ICONS_IMAGE=arasaac-icons:de-500 -t arasaac-mcp .
+```
 
 ### Library
 
