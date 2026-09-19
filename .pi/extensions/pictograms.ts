@@ -318,7 +318,7 @@ export default function (pi: ExtensionAPI) {
 		label: "Piktogrammfolge rendern",
 		description:
 			"Rendert eine geordnete Liste von Piktogramm-WÖRTERN zu einem einzelnen Bild " +
-			"(Satzstreifen) und gibt es samt Ausgabedateipfad zurück. Optional Satz-/Bedeutungstext " +
+			"(Bildfolge) und gibt es samt Ausgabedateipfad zurück. Optional Kopfzeile/Erklärung " +
 			"und Fitzgerald-Farbrahmen über Rollen.",
 		promptSnippet: "Die gewählte Piktogramm-Wortfolge als Bild rendern",
 		promptGuidelines: [
@@ -331,8 +331,8 @@ export default function (pi: ExtensionAPI) {
 					description: "Optionale Rolle pro Wort: PERSON, NOUN, VERB, QUALITY, SOCIAL, MISC.",
 				}),
 			),
-			sentence: Type.Optional(Type.String({ description: "Originaler Satz als Kopfzeile." })),
-			meaning: Type.Optional(Type.String({ description: "Paraphrase in einfacher Sprache darunter." })),
+			sentence: Type.Optional(Type.String({ description: "Kurze Kopfzeile in einfacher Sprache (Aussage, Situation oder Regel)." })),
+			meaning: Type.Optional(Type.String({ description: "Einfache Erklärung darunter (z. B. für Betreuungspersonen)." })),
 			labels: Type.Optional(Type.Boolean({ description: "Jedes Icon beschriften (Standard true).", default: true })),
 			columns: Type.Optional(Type.Number({ description: "Spaltenzahl erzwingen." })),
 			icon_size: Type.Optional(Type.Number({ description: "Icon-Boxgröße in px (Standard 300)." })),

@@ -1,10 +1,14 @@
 # ARASAAC pictogram strips
 
-Turn a sorted list of ARASAAC pictograms into a single image or PDF — a
+Turn an ordered list of ARASAAC pictograms into a single image or PDF — a
 *sentence strip* for AAC (augmentative and alternative communication).
 
-See [`CONCEPT.md`](./CONCEPT.md) for the idea and [`prompt.md`](./prompt.md)
-for the rules used to turn a sentence into an ordered pictogram list.
+The bundled agent goes one step further: it takes a German text — a sentence,
+a situation, a rule, a routine or a request — and **designs** the pictogram
+sequence that conveys it as clearly as possible. The target audience is people
+with limited reading or language comprehension, especially **children in
+special education**. See [`prompt.md`](./prompt.md) for the rules and
+[`CONCEPT.md`](./CONCEPT.md) for the background.
 
 ## Install
 
@@ -59,6 +63,11 @@ Roles and their colours: `PERSON` yellow, `NOUN` orange, `VERB` green,
 
 ## Agent (pi)
 
+The agent works on **any German input**, not just sentences. It first works out
+the goal and core message, then designs a sequence that is understandable from
+the pictures alone (concrete icons, everyday words, ≤ ~5 pictograms, order =
+meaning). The rules live in [`prompt.md`](./prompt.md).
+
 `.pi/extensions/pictograms.ts` registers three **word-based** tools (the agent
 never sees numeric IDs or file names):
 
@@ -72,9 +81,9 @@ never sees numeric IDs or file names):
 allowlist, so the agent can call **only** these three tools. The model is pinned
 in its frontmatter (`model: deepseek-v4.1-flash`).
 
-The agent talks **German**: replies, the `meaning` paraphrase, the `notes` and
-alternative labels are all in German, regardless of the English tool output.
-See [`prompt.md`](./prompt.md) §0.
+The agent talks **German**: replies, the `sentence` header, the `meaning`
+explanation, the `notes` and alternative labels are all in German, regardless
+of the English tool output. See [`prompt.md`](./prompt.md) §0.
 
 ```bash
 # Run the agent headless (uses only the project tools):

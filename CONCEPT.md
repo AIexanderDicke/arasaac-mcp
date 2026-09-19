@@ -1,8 +1,11 @@
-# Konzept: Satz → ARASAAC-Piktogramme
+# Konzept: Text → ARASAAC-Piktogramme
 
-Ein Helfer, der einen Satz (typischerweise Deutsch) in eine **symbolische
-Piktogrammfolge** umwandelt, damit Menschen mit kognitiven oder sprachlichen
-Einschränkungen den Inhalt eines Satzes verstehen können.
+Ein Helfer, der einen **deutschen Text** — einen Satz, eine Situation, eine
+Regel, eine Routine oder eine Bitte — in eine **symbolische Piktogrammfolge**
+umwandelt, damit Menschen mit kognitiven oder sprachlichen Einschränkungen den
+Inhalt verstehen können. Zielgruppe sind besonders **Kinder in der
+Sonderpädagogik**: Die Folge soll **auf einen Blick** verständlich sein, auch
+ohne lesen zu können.
 
 Der zugehörige Modell-Prompt liegt in [`prompt.md`](./prompt.md).
 
@@ -10,26 +13,31 @@ Der zugehörige Modell-Prompt liegt in [`prompt.md`](./prompt.md).
 
 ## 1. Ziel
 
-- Eingabe: ein Satz, z. B. *"Wenn es regnet, müssen alle Schüler drin bleiben."*
-- Ausgabe: eine geordnete Liste von ARASAAC-Piktogramm-Dateien, z. B.
-  `3123_Regen.png, 36081_alle.png, 32666_Schüler.png, 5439_drinnen.png`
-- Das Ergebnis soll den **Sinn/Kontext** transportieren, **nicht** den Satz Wort
-  für Wort nachmalen.
+- Eingabe: ein Satz **oder eine Beschreibung**, z. B.
+  *"Wenn es regnet, müssen alle Schüler drin bleiben."* oder
+  *"Ich brauche eine Darstellung davon, dass man sich vor dem Essen die Hände
+  waschen soll."*
+- Ausgabe: eine geordnete Folge von ARASAAC-Piktogrammen (im Agenten über
+  Wörter adressiert, z. B. `Händewaschen, essen`; im Renderer als Dateien).
+- Das Ergebnis soll den **Sinn/Kontext** transportieren, **nicht** die Eingabe
+  Wort für Wort nachmalen. Eine Bitte um ein Bild wird durch ihren Inhalt
+  erfüllt, nicht durch die Bitte selbst.
 
 ## 2. Kernidee
 
 Nicht transliterieren, sondern **Bedeutung verdichten**:
 
-1. Satz verstehen (wer, was, wo, wann, wie, warum).
+1. Text verstehen: Ziel und Kernaussage bestimmen (wer, was, wo, wann, wie,
+   warum; bei Regeln/Bitten: was soll verstanden oder getan werden?).
 2. Nur die Konzepte behalten, die zum Verständnis nötig sind.
-3. Für jedes Konzept das eindeutigste Piktogramm suchen.
-4. Reihenfolge festlegen, die den Inhalt am klarsten wiedergibt.
+3. Für jedes Konzept das eindeutigste, konkreteste Piktogramm suchen.
+4. Reihenfolge festlegen, die den Inhalt am klarsten wiedergibt (links → rechts
+   = zuerst … dann).
 5. Mehrere sinnvolle Varianten anbieten → menschliche Auswahl.
 
 Piktogramme liegen in `icons/` und heißen `[nummer]_[beschreibung].png`. Die
-Nummer ist bedeutungslos; gesucht wird nur über die Beschreibung (deutsche
-Keywords, Unterstriche statt Leerzeichen, Umlaute bleiben erhalten, z. B.
-`24986_Hundertfüßer.png`).
+Nummer ist bedeutungslos; der Agent sucht und spricht nur über die Beschreibung
+(deutsche Keywords, z. B. `Händewaschen` oder `Zähne putzen`).
 
 ## 3. Entscheidungen aus der Diskussion
 

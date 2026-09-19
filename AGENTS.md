@@ -6,19 +6,20 @@ adds what is specific to this project.
 
 ## What this is
 
-A helper that turns a German sentence into an **ordered ARASAAC pictogram
-sequence** and renders it as an image/PDF, so people with limited reading or
-language comprehension can understand the sentence.
+A helper that turns a German text — a sentence, a situation, a rule, a routine
+or a request — into an **ordered ARASAAC pictogram sequence** and renders it as
+an image/PDF, so people with limited reading or language comprehension —
+especially children in special education — can understand it.
 
 - Idea and background: [`CONCEPT.md`](CONCEPT.md) (see §8 for the roadmap).
-- Model rules (the "spec" of the transcription): [`prompt.md`](prompt.md).
+- Model rules (the "spec" of the representation): [`prompt.md`](prompt.md).
 - Usage: [`README.md`](README.md).
 
 ## Architecture (how the pieces fit)
 
 ```
 pi agent (.pi/agents/pictogram-transcriber.md)
-  │  system prompt from prompt.md + tools allowlist
+  │  system prompt (kept in sync with prompt.md) + tools allowlist
   ▼
 pi extension (.pi/extensions/pictograms.ts)  → 3 word-based tools
   │  render_pictogram_sheet
@@ -131,11 +132,18 @@ python scripts/run_transcriber.py --mode json "…" > trace.jsonl   # full tool 
 
 ## Conventions
 
-- Output the **sentence order** by default; reduce function words; prefer one
+- The input is **not necessarily a sentence**: first work out the goal and the
+  core message. A request for a picture (`Ich brauche eine Darstellung von …`)
+  is satisfied by depicting its content, never the request itself.
+- Design for **very easy understanding** (special-education children): concrete
+  icons only, everyday words, one message per strip, aim ≤ 5 pictograms, order =
+  meaning (first … then). See `prompt.md` §2.
+- Follow the **message order** by default; reduce function words; prefer one
   icon that already encodes several concepts (e.g. the red `Auto`).
-- The transcriber **communicates in German** (replies, `meaning`, `notes`,
-  alternative labels) even though the prompt itself is English. The rule lives
-  in `prompt.md` §0 and the agent prompt — keep both in sync.
+- The transcriber **communicates in German** (replies, `sentence` header,
+  `meaning`, `notes`, alternative labels) even though the prompt itself is
+  English. The rule lives in `prompt.md` §0 and the agent prompt — keep both in
+  sync.
 - Never emit a misleading icon; verify ambiguous candidates with
   `view_pictogram` (see `prompt.md` for known traps: `verbleiben`, `vor`).
 - Aim ≤ 5 pictograms, hard cap ~8.
