@@ -204,7 +204,7 @@ function resolveWord(dir: string, word: string): Pic {
 		}
 	}
 	if (!best) {
-		throw new Error(`No pictogram found for "${word}". Search for a simpler word or a synonym.`);
+		throw new Error(`Kein Piktogramm für "${word}" gefunden. Suche nach einem einfacheren Wort oder einem Synonym.`);
 	}
 	return best;
 }
@@ -223,26 +223,26 @@ function dedupeByWord(dir: string, hits: { pic: Pic; value: number }[]): { pic: 
 export default function (pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "search_pictograms",
-		label: "Search pictograms",
+		label: "Piktogramme suchen",
 		description:
-			"Search the ARASAAC pictogram library by German keyword. Searches descriptions plus " +
-			"the official metadata (synonyms, tags, categories). Returns pictograms by their " +
-			"WORD, never by file name or number.",
-		promptSnippet: "Search ARASAAC pictograms by German keyword; returns words",
+			"Durchsucht die ARASAAC-Piktogrammbibliothek nach deutschem Stichwort. Sucht in " +
+			"Beschreibungen sowie in den offiziellen Metadaten (Synonyme, Tags, Kategorien). " +
+			"Liefert Piktogramme nur per WORT, nie per Dateiname oder Nummer.",
+		promptSnippet: "ARASAAC-Piktogramme nach deutschem Stichwort suchen; liefert Wörter",
 		promptGuidelines: [
-			"Use search_pictograms to find a pictogram for each concept; search by the German word and try synonyms. Refer to results by their word.",
+			"Nutze search_pictograms, um für jedes Konzept ein Piktogramm zu finden; suche nach dem deutschen Wort und probiere Synonyme. Beziehe dich auf Ergebnisse immer mit ihrem Wort.",
 		],
 		parameters: Type.Object({
-			query: Type.String({ description: "One or more keywords, space/comma separated (German)." }),
+			query: Type.String({ description: "Ein oder mehrere Stichwörter, durch Leerzeichen/Kommas getrennt (Deutsch)." }),
 			limit: Type.Optional(
-				Type.Number({ description: "Max number of words to return (default 25).", default: 25 }),
+				Type.Number({ description: "Maximale Anzahl zurückgegebener Wörter (Standard 25).", default: 25 }),
 			),
 		}),
 		async execute(_id, params, _signal, _onUpdate, ctx) {
 			const dir = iconsDir(ctx.cwd);
 			const tokens = tokenize(params.query ?? "");
 			if (tokens.length === 0) {
-				return { content: [{ type: "text", text: "Empty query." }], details: {} };
+				return { content: [{ type: "text", text: "Leere Suchanfrage." }], details: {} };
 			}
 			const limit = Math.max(1, Math.min(params.limit ?? 25, 100));
 			const scored = dedupeByWord(
@@ -257,7 +257,7 @@ export default function (pi: ExtensionAPI) {
 			if (scored.length === 0) {
 				return {
 					content: [
-						{ type: "text", text: `No pictograms matched "${params.query}". Try a synonym or a simpler noun.` },
+						{ type: "text", text: `Keine Piktogramme zu "${params.query}" gefunden. Probiere ein Synonym oder ein einfacheres Substantiv.` },
 					],
 					details: {},
 				};
@@ -267,7 +267,7 @@ export default function (pi: ExtensionAPI) {
 				const label = labelOf(dir, item.pic);
 				const synonyms = item.pic.keywords.slice(1).join(", ");
 				const extras = item.pic.extra.slice(0, 4).join(", ");
-				const detail = [synonyms && `synonyms: ${synonyms}`, extras && `tags: ${extras}`]
+				const detail = [synonyms && `Synonyme: ${synonyms}`, extras && `Tags: ${extras}`]
 					.filter(Boolean)
 					.join("; ");
 				return `${index + 1}. ${label}${detail ? ` — ${detail}` : ""}`;
@@ -276,7 +276,7 @@ export default function (pi: ExtensionAPI) {
 				content: [
 					{
 						type: "text",
-						text: `Found ${scored.length} match(es) for "${params.query}":\n${lines.join("\n")}`,
+						text: `Gefunden: ${scored.length} Treffer für "${params.query}":\n${lines.join("\n")}`,
 					},
 				],
 				details: { query: params.query, words: scored.map((item) => labelOf(dir, item.pic)) },
@@ -286,16 +286,17 @@ export default function (pi: ExtensionAPI) {
 
 	pi.registerTool({
 		name: "view_pictogram",
-		label: "View pictogram",
+		label: "Piktogramm ansehen",
 		description:
-			"Return a pictogram image, identified by its WORD, so you can visually verify what it " +
-			"actually depicts. Use it for ambiguous candidates before selecting them.",
-		promptSnippet: "View a pictogram image (by word) to verify its meaning",
+			"Gibt das Bild eines Piktogramms zurück, identifiziert per WORT, damit du visuell " +
+			"prüfen kannst, was es tatsächlich darstellt. Nutze es für mehrdeutige Kandidaten, " +
+			"bevor du sie auswählst.",
+		promptSnippet: "Ein Piktogrammbild (per Wort) ansehen, um seine Bedeutung zu prüfen",
 		promptGuidelines: [
-			"Use view_pictogram with the result word to visually verify ambiguous pictogram candidates before selecting them.",
+			"Nutze view_pictogram mit dem Ergebniswort, um mehrdeutige Piktogramm-Kandidaten visuell zu prüfen, bevor du sie auswählst.",
 		],
 		parameters: Type.Object({
-			word: Type.String({ description: 'The pictogram word, e.g. "Regen" or a synonym.' }),
+			word: Type.String({ description: 'Das Piktogrammwort, z. B. "Regen" oder ein Synonym.' }),
 		}),
 		async execute(_id, params, _signal, _onUpdate, ctx) {
 			const dir = iconsDir(ctx.cwd);
@@ -304,7 +305,7 @@ export default function (pi: ExtensionAPI) {
 			const synonyms = pic.keywords.slice(1).join(", ");
 			return {
 				content: [
-					{ type: "text", text: `Showing "${labelOf(dir, pic)}"${synonyms ? ` (synonyms: ${synonyms})` : ""}` },
+					{ type: "text", text: `Zeige "${labelOf(dir, pic)}"${synonyms ? ` (Synonyme: ${synonyms})` : ""}` },
 					{ type: "image", data, mimeType: "image/png" },
 				],
 				details: { word: labelOf(dir, pic) },
@@ -314,40 +315,40 @@ export default function (pi: ExtensionAPI) {
 
 	pi.registerTool({
 		name: "render_pictogram_sheet",
-		label: "Render pictogram sheet",
+		label: "Piktogrammfolge rendern",
 		description:
-			"Render an ordered list of pictogram WORDS into a single image (sentence strip) and " +
-			"return it, plus the output file path. Optional sentence/meaning text and " +
-			"Fitzgerald-key colour frames via roles.",
-		promptSnippet: "Render the chosen pictogram word sequence as an image",
+			"Rendert eine geordnete Liste von Piktogramm-WÖRTERN zu einem einzelnen Bild " +
+			"(Satzstreifen) und gibt es samt Ausgabedateipfad zurück. Optional Satz-/Bedeutungstext " +
+			"und Fitzgerald-Farbrahmen über Rollen.",
+		promptSnippet: "Die gewählte Piktogramm-Wortfolge als Bild rendern",
 		promptGuidelines: [
-			"Use render_pictogram_sheet once you have chosen the primary pictogram sequence, passing the words in order.",
+			"Nutze render_pictogram_sheet, sobald du die primäre Piktogrammfolge gewählt hast, und übergib die Wörter in der richtigen Reihenfolge.",
 		],
 		parameters: Type.Object({
-			words: Type.Array(Type.String(), { description: "Ordered pictogram words, e.g. [\"Regen\", \"alle\"]." }),
+			words: Type.Array(Type.String(), { description: "Geordnete Piktogrammwörter, z. B. [\"Regen\", \"alle\"]." }),
 			roles: Type.Optional(
 				Type.Array(Type.String(), {
-					description: "Optional role per word: PERSON, NOUN, VERB, QUALITY, SOCIAL, MISC.",
+					description: "Optionale Rolle pro Wort: PERSON, NOUN, VERB, QUALITY, SOCIAL, MISC.",
 				}),
 			),
-			sentence: Type.Optional(Type.String({ description: "Original sentence shown as a header." })),
-			meaning: Type.Optional(Type.String({ description: "Plain-language paraphrase shown below it." })),
-			labels: Type.Optional(Type.Boolean({ description: "Label each icon (default true).", default: true })),
-			columns: Type.Optional(Type.Number({ description: "Force the column count." })),
-			icon_size: Type.Optional(Type.Number({ description: "Icon box size in px (default 300)." })),
+			sentence: Type.Optional(Type.String({ description: "Originaler Satz als Kopfzeile." })),
+			meaning: Type.Optional(Type.String({ description: "Paraphrase in einfacher Sprache darunter." })),
+			labels: Type.Optional(Type.Boolean({ description: "Jedes Icon beschriften (Standard true).", default: true })),
+			columns: Type.Optional(Type.Number({ description: "Spaltenzahl erzwingen." })),
+			icon_size: Type.Optional(Type.Number({ description: "Icon-Boxgröße in px (Standard 300)." })),
 		}),
 		async execute(_id, params, signal, _onUpdate, ctx) {
 			const dir = iconsDir(ctx.cwd);
 			if (!params.words || params.words.length === 0) {
-				throw new Error("words must not be empty");
+				throw new Error("words darf nicht leer sein");
 			}
 			if (params.roles && params.roles.length !== params.words.length) {
-				throw new Error("roles must have the same length as words");
+				throw new Error("roles muss dieselbe Länge wie words haben");
 			}
 			if (params.roles) {
 				for (const role of params.roles) {
 					if (!VALID_ROLES.includes(role.toUpperCase())) {
-						throw new Error(`invalid role "${role}" (expected one of ${VALID_ROLES.join(", ")})`);
+						throw new Error(`Ungültige Rolle "${role}" (erwartet: ${VALID_ROLES.join(", ")})`);
 					}
 				}
 			}
@@ -389,7 +390,7 @@ export default function (pi: ExtensionAPI) {
 			const wordsLine = resolved.map((pic) => labelOf(dir, pic)).join(", ");
 			return {
 				content: [
-					{ type: "text", text: `Rendered sheet: ${outputPath}\n${wordsLine}` },
+					{ type: "text", text: `Gerendertes Piktogrammblatt: ${outputPath}\n${wordsLine}` },
 					{ type: "image", data, mimeType: "image/png" },
 				],
 				details: { path: outputPath, words: wordsLine },

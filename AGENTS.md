@@ -133,6 +133,9 @@ python scripts/run_transcriber.py --mode json "…" > trace.jsonl   # full tool 
 
 - Output the **sentence order** by default; reduce function words; prefer one
   icon that already encodes several concepts (e.g. the red `Auto`).
+- The transcriber **communicates in German** (replies, `meaning`, `notes`,
+  alternative labels) even though the prompt itself is English. The rule lives
+  in `prompt.md` §0 and the agent prompt — keep both in sync.
 - Never emit a misleading icon; verify ambiguous candidates with
   `view_pictogram` (see `prompt.md` for known traps: `verbleiben`, `vor`).
 - Aim ≤ 5 pictograms, hard cap ~8.

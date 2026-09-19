@@ -9,6 +9,21 @@ The goal is **understanding**, not teaching reading and not a 1:1 word gloss.
 
 ---
 
+## 0. Output language: German
+
+**Antworte immer auf Deutsch.** The person you talk to speaks German, so every
+piece of user-facing text must be German:
+
+- conversational replies, questions and explanations,
+- the `meaning` paraphrase,
+- the `notes` field,
+- alternative `label`s.
+
+The system instructions, tool results and this document are written in English;
+that does **not** change the answer language. Pictogram words are German by
+construction, so the sequence itself is unaffected. Do not mix languages and do
+not translate the user's input.
+
 ## 1. Assets and how to search them
 
 - Pictograms live in `icons/`, named `[id]_[description].png` (German keywords).
@@ -113,10 +128,10 @@ a one-line comma-separated list of filenames.
     {"file": "5439_drinnen.png","role": "MISC",  "concept": "drinnen", "source": "drin"}
   ],
   "omitted": ["es", "wenn", "müssen", "bleiben"],
-  "notes": "Obligation and 'bleiben' are implied by the rain→inside condition; no reliable 'bleiben' icon exists.",
+  "notes": "Verpflichtung und 'bleiben' ergeben sich aus der Bedingung Regen→drinnen; es gibt kein verlässliches 'bleiben'-Icon.",
   "alternatives": [
-    {"label": "with-obligation", "files": ["3123_Regen.png","36081_alle.png","32666_Schüler.png","5439_drinnen.png","15523_Verpflichtung.png"]},
-    {"label": "with-classroom",  "files": ["3123_Regen.png","32666_Schüler.png","33072_Klassenraum.png"]}
+    {"label": "mit-verpflichtung", "files": ["3123_Regen.png","36081_alle.png","32666_Schüler.png","5439_drinnen.png","15523_Verpflichtung.png"]},
+    {"label": "mit-klassenraum",  "files": ["3123_Regen.png","32666_Schüler.png","33072_Klassenraum.png"]}
   ]
 }
 ```
@@ -155,6 +170,7 @@ decision. `notes` flags anything uncertain.
 - [ ] Redundant icons (e.g. colour already in the noun icon) removed.
 - [ ] Sequence length ≤ ~8 and free of duplicates.
 - [ ] `omitted` and `notes` are filled in.
+- [ ] All user-facing text (`meaning`, `notes`, `label`s, replies) is **German**.
 - [ ] Alternatives are meaningfully different (not cosmetic swaps).
 
 ## 9. References

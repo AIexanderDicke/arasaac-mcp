@@ -33,7 +33,7 @@ uv run make-sheet \
 
 # straight from the model output contract (roles -> Fitzgerald colour frames)
 uv run make-sheet --json result.json -o strip.png
-uv run make-sheet --json result.json --alternative with-obligation -o alt.pdf
+uv run make-sheet --json result.json --alternative mit-verpflichtung -o alt.pdf
 ```
 
 Filenames may be given as positional arguments (space/comma separated), or on
@@ -71,6 +71,10 @@ never sees numeric IDs or file names):
 `.pi/agents/pictogram-transcriber.md` holds the system prompt and a `tools:`
 allowlist, so the agent can call **only** these three tools. The model is pinned
 in its frontmatter (`model: deepseek-v4.1-flash`).
+
+The agent talks **German**: replies, the `meaning` paraphrase, the `notes` and
+alternative labels are all in German, regardless of the English tool output.
+See [`prompt.md`](./prompt.md) §0.
 
 ```bash
 # Run the agent headless (uses only the project tools):
