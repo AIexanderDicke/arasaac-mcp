@@ -324,9 +324,10 @@ def create_server(
         optional and parallel to `words`: PERSON, NOUN, VERB, QUALITY, SOCIAL,
         MISC (Fitzgerald colour frames). Call it once for the primary sequence.
 
-        Der Host zeigt das gerenderte Bild selbst als Web-Vorschau an (über
-        image_url). Gib die Bild-URL NICHT in deiner Antwort aus und bette sie
-        nicht als Markdown-Bild ein.
+        Gib die Bild-URL in deiner Antwort als reinen Link aus
+        ([Piktogrammblatt](URL) oder Klartext) — NIE als Markdown-Bild
+        (![...]): der Host erzeugt daraus die Web-Vorschau, und eingebettete
+        Bilder werden über einen Proxy geladen, der localhost nicht erreicht.
         """
         return render_word_sheet(
             catalog, words, roles, sentence, meaning, labels, columns, icon_size, debug_dir
@@ -349,9 +350,10 @@ def create_server(
         string is an icon shorthand and a list becomes a column. Node types:
         icon, text, row, column, card, grid, arrow, spacer, divider, canvas.
 
-        Der Host zeigt das gerenderte Bild selbst als Web-Vorschau an (über
-        image_url). Gib die Bild-URL NICHT in deiner Antwort aus und bette sie
-        nicht als Markdown-Bild ein.
+        Gib die Bild-URL in deiner Antwort als reinen Link aus
+        ([Piktogrammblatt](URL) oder Klartext) — NIE als Markdown-Bild
+        (![...]): der Host erzeugt daraus die Web-Vorschau, und eingebettete
+        Bilder werden über einen Proxy geladen, der localhost nicht erreicht.
         """
         return render_tree(
             catalog, layout, sentence, meaning, page_size, labels, icon_size, debug_dir
