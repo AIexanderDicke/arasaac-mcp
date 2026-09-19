@@ -2,7 +2,8 @@
 
 Project-specific guide for agents working in `/workspaces/dev/arasaac`.
 The container-wide guide at `/workspaces/dev/AGENTS.md` still applies; this file
-adds what is specific to this project.
+adds what is specific to this project and is the **single setup/usage reference**
+(the [`README.md`](README.md) is deliberately a short human overview).
 
 ## What this is
 
@@ -13,7 +14,7 @@ especially children in special education — can understand it.
 
 - Idea and background: [`CONCEPT.md`](CONCEPT.md) (see §8 for the roadmap).
 - Model rules (the "spec" of the representation): [`scripts/prompt.md`](scripts/prompt.md).
-- Usage: [`README.md`](README.md).
+- User-facing overview: [`README.md`](README.md).
 
 ## Architecture (how the pieces fit)
 
@@ -47,6 +48,8 @@ core.
 | `src/arasaac_pictograms/skill.py` | Locates/reads the generated Agent Skill for the MCP prompt/resource |
 | `scripts/build_skill.py` | Generates `skills/` from `scripts/prompt.md` (`--check` for drift) |
 | `scripts/test_mcp.py` | Offline catalog + MCP tests (in-memory client, no LLM) |
+| `scripts/mcp_up.sh` | Start/restart relay + MCP server in tmux without killing the VS Code forwarded port |
+| `scripts/port_relay.py` | Stable TCP relay in front of the MCP server (keeps the forwarded port bound) |
 | `skills/arasaac-pictograms/` | **generated** Agent Skill (SKILL.md + `references/`); do not edit by hand |
 | `Dockerfile`, `docker-compose.yml`, `.dockerignore` | Self-contained image (code + fonts + 338 MB icons), no API key |
 | `examples/mcp.json` | MCP host config template (stdio) |
@@ -57,55 +60,227 @@ core.
 | `scripts/prompt.md`, `CONCEPT.md`, `README.md` | Docs |
 | `examples/` | Sample layout JSON: `stundenplan.json` (grid), `karten.json` (cards + arrow) |
 
-## Environment
+## Setup
 
 - Python **3.13**, dependencies managed by **uv**. Core dependency: **Pillow**.
-  The MCP server is an optional extra (FastMCP): `uv sync --extra mcp`.
+  The MCP server is an optional extra (FastMCP).
 - Run Python via `uv run …`. **Never `source .venv/bin/activate`** — `uv run`
-  provisions the environment itself, and the tool shells out to it.
-- There are **no system fonts** in the container and Pillow's bundled default
-  (Aileron) does **not** render `ä ö ü ß`. The repo bundles Noto Sans; keep it.
-  Override with `ARASAAC_FONT=/path/to/font.ttf` if ever needed.
-- `icons/`, `.venv/`, `output/`, `__pycache__/` are gitignored. Keep it that way
-  (icons are 338 MB; committing them would be a mistake).
-- The MCP server writes every rendered sheet to `output/` for local debugging
-  (`ARASAAC_OUTPUT_DIR`, `--output-dir`, `--no-save`). That local file is a
-  convenience only — the image travels in the tool result; a server path is
-  meaningless to a remote client.
-
-## Common tasks
+  provisions the environment itself, and the tools shell out to it.
 
 ```bash
 uv sync                          # install deps (Pillow)
-
-# Start/restart the MCP server without breaking the VS Code forwarded port:
-scripts/mcp_up.sh                # start relay (port 8000) + server (port 8001)
-scripts/mcp_up.sh --force        # restart only the MCP server
-# The relay keeps the forwarded port bound permanently, so the server can be
-# restarted freely; VS Code's forwarder never needs to be re-created.
 uv sync --extra mcp              # + the MCP server (fastmcp)
+```
 
-# Render directly (filenames or the model's JSON contract):
+- **Icons are not in git** (`icons/`, ~338 MB). Fetch them once (stdlib only,
+  no deps needed):
+
+```bash
+uv run python download_icons.py --lang de --size 500   # writes icons/ + metadata_de.json
+```
+
+- There are **no system fonts** in the container and Pillow's bundled default
+  (Aileron) does **not** render `ä ö ü ß`. The repo bundles Noto Sans; keep it.
+- `icons/`, `.venv/`, `output/`, `__pycache__/` are gitignored. Keep it that way
+  (icons are 338 MB; committing them would be a mistake).
+
+### Environment variables
+
+| Variable | Used by | Meaning |
+| --- | --- | --- |
+| `ARASAAC_ICONS_DIR` | catalog, MCP | Pictogram directory (default `./icons`, else `../icons`) |
+| `ARASAAC_OUTPUT_DIR` | MCP | Where debug renders are written (default `./output`) |
+| `ARASAAC_PUBLIC_BASE_URL` | MCP | Base URL for image links (default `http://localhost:8000`) |
+| `ARASAAC_TRANSPORT` | MCP | `stdio` (default), `http` or `sse` |
+| `ARASAAC_HOST` / `ARASAAC_PORT` | MCP | HTTP/SSE bind address (default `127.0.0.1:8000`) |
+| `ARASAAC_SKILL_DIR` | skill | Override the generated skill location |
+| `ARASAAC_FONT` | layout | Override the bundled Noto Sans font |
+| `ARASAAC_PORT` / `ARASAAC_INTERNAL_PORT` | `mcp_up.sh` | Public relay port (`8000`) / internal server port (`8001`) |
+| `ARASAAC_HOST` | `mcp_up.sh` | Internal server host (default `127.0.0.1`) |
+| `ARASAAC_RELAY_SESSION` / `ARASAAC_MCP_SESSION` | `mcp_up.sh` | tmux session names |
+
+## Usage
+
+### CLI — `make-sheet`
+
+```bash
 uv run make-sheet --labels -o sheet.png -o sheet.pdf 2339_Auto.png 2909_Berg.png
 uv run make-sheet --json result.json -o sheet.png
 uv run make-sheet --help
+```
 
-# Free layouts (timetable, cards): a JSON with a `layout` tree + optional --page-size
+Filenames are positional (space/comma separated) or on stdin with `-`; the
+output format is chosen by extension (`.png`, `.jpg`, `.pdf`). `--json` reads
+either the model output contract (`{sentence, meaning, sequence, alternatives}`,
+roles → Fitzgerald colour frames) or a free `{layout}` tree. Roles can only be
+passed via `--json` (`sequence[].role`).
+
+Key options (full list in `cli.py`): `-o/--output` (repeatable, default
+`pictogram_strip.png`), `--json`, `--alternative N|LABEL`, `--sentence`,
+`--meaning`, `--labels`, `--no-frames`, `--no-attribution`, `--icon-size`
+(300), `--columns`, `--max-columns` (6), `--gap` (28), `--margin` (48),
+`--padding` (16), `--scale` (2), `--dpi` (96), `--page-size`.
+
+Roles (Fitzgerald key, `ROLE_COLORS` in `layout.py`): `PERSON` yellow,
+`NOUN` orange, `VERB` green, `QUALITY` blue, `SOCIAL` pink, `MISC` grey.
+
+### Free layouts (timetables, cards, canvases)
+
+Pass a `--json` file with a `layout` tree to arrange pictograms in more than one
+dimension:
+
+```bash
 uv run make-sheet --json examples/stundenplan.json --icons-dir icons \
   --page-size a4-landscape --icon-size 150 -o plan.png
+```
 
-# Offline tool tests (no LLM, fast):
-uv run --extra mcp python scripts/test_mcp.py   # catalog + MCP server
+```json
+{
+  "sentence": "Mein Stundenplan",
+  "layout": {
+    "type": "grid",
+    "columns": ["Montag", "Dienstag"],
+    "rows": [
+      {"header": "1.", "cells": ["36373_Mathe.png", "10258_Sport.png"]},
+      {"header": "2.", "cells": ["24503_Pause.png", "24903_Schwimmen.png"]}
+    ]
+  }
+}
+```
 
-# MCP server + skill:
-uv run --extra mcp arasaac-mcp                  # stdio; add --transport http for HTTP
-python scripts/build_skill.py                   # regenerate the skill from scripts/prompt.md
-python scripts/build_skill.py --check           # fail if the skill is stale
+Node types (all sizes in px; see `layout.py`):
 
-# Container (self-contained; compose sets up HTTP on :8000/mcp):
-docker build -t arasaac-mcp . && docker run --rm -p 8000:8000 arasaac-mcp \
-  --transport http --host 0.0.0.0
-docker run --rm -i arasaac-mcp --transport stdio   # stdio for a local host
+| Node | Purpose |
+| --- | --- |
+| `icon` | one pictogram (`file`, `role?`, `concept?`, `size?`, `show_label?`, `frame?`) |
+| `text` | caption/heading (`text`, `size?`, `bold?`, `align?`, `color?`) |
+| `row` / `column` | children laid out horizontally / stacked (`children`, `gap?`, `align?`, `padding?`) |
+| `card` | framed column (`border?`, `border_width?`, `dashed?`, `radius?`, `background?`) |
+| `grid` (alias `table`) | timetable/table (`columns`, `rows` with `header`+`cells`, `border?`, `header_background?`) |
+| `arrow` | connector (`direction?`, `length?`, `thickness?`, `color?`) |
+| `spacer` / `divider` | empty space / a line |
+| `canvas` | free placement (`width?`, `height?`, `children` of `{x, y, node}`) |
+
+Lists are stacked as columns; a bare string is an icon shorthand. A complete
+card sheet (`row` of `card`s + `arrow`, dashed consequence boxes) is in
+[`examples/`](./examples). `--page-size` accepts `a4`, `a4-landscape`, `letter`
+or `WxH`.
+
+### MCP server — `arasaac-mcp`
+
+The host brings the model; the server runs **no LLM** and needs **no API key** —
+it only searches, shows and renders pictograms.
+
+```bash
+uv run --extra mcp arasaac-mcp                    # stdio (default)
+uv run --extra mcp arasaac-mcp --transport http   # streamable HTTP on /mcp
+uv run --extra mcp python scripts/test_mcp.py     # offline tests, no LLM
+```
+
+| Surface | Name | Purpose |
+| --- | --- | --- |
+| tool | `search_pictograms` | German word search (descriptions + metadata) |
+| tool | `view_pictogram` | pictogram icon — URL-based (image block only with `--no-save`) |
+| tool | `render_pictogram_sheet` | ordered word sequence → strip image |
+| tool | `render_pictogram_layout` | layout tree (grid/cards/canvas) → image |
+| prompt | `pictogram_transcriber` | full recipe + the German text |
+| resource | `arasaac://skill` | the Agent Skill (`SKILL.md`) |
+| resource | `arasaac://rules` | the full recipe (skill + references) |
+| HTTP | `GET /sheet/<name>` | serves a rendered sheet/icon PNG |
+
+Rendered sheets and viewed icons are saved to `output/` (override with
+`--output-dir` / `ARASAAC_OUTPUT_DIR`, disable with `--no-save`) and served
+under `/sheet/<name>`; the tool's text block reports the URL. The base URL
+defaults to `http://localhost:8000` (`ARASAAC_PUBLIC_BASE_URL`).
+
+#### Connecting a host
+
+The server speaks **stdio** (default) or **streamable HTTP** (`/mcp`). A stdio
+entry (Claude Desktop, Claude Code, …) looks like
+[`examples/mcp.json`](examples/mcp.json):
+
+```json
+{
+  "mcpServers": {
+    "arasaac-pictograms": {
+      "command": "uv",
+      "args": ["run", "--extra", "mcp", "arasaac-mcp"],
+      "cwd": "/path/to/arasaac",
+      "env": { "ARASAAC_ICONS_DIR": "/path/to/arasaac/icons" }
+    }
+  }
+}
+```
+
+For a long-running container or HTTP host, point the client at
+`http://HOST:8000/mcp` instead.
+
+#### Keeping the forwarded port alive (VS Code)
+
+The VS Code port forwarder binds once and does not retry, so restarting the MCP
+server would kill the forwarded port. `scripts/port_relay.py` keeps a permanent
+listener and re-resolves its upstream per connection:
+
+```bash
+scripts/mcp_up.sh                # start relay (8000) + server (8001)
+scripts/mcp_up.sh --force        # restart only the MCP server
+```
+
+Both run in tmux (`arasaac-relay`, `arasaac-mcp`); logs in
+`/tmp/arasaac-relay.log` and `/tmp/arasaac-mcp.log`.
+
+### Skill generation
+
+`skills/arasaac-pictograms/` (SKILL.md + on-demand `references/`) is generated
+from `scripts/prompt.md` — the single source of truth:
+
+```bash
+python scripts/build_skill.py           # regenerate after editing scripts/prompt.md
+python scripts/build_skill.py --check   # fail if the skill is stale
+```
+
+### Docker
+
+The image bundles the code, fonts and the ~338 MB pictogram set, so it runs
+**offline** and needs **no API key**:
+
+```bash
+docker build -t arasaac-mcp .
+docker run --rm -p 8000:8000 arasaac-mcp --transport http --host 0.0.0.0   # :8000/mcp
+docker run --rm -i arasaac-mcp --transport stdio                            # stdio
+docker compose up --build                                                   # HTTP + output volume
+```
+
+Compose sets transport/host/port via `ARASAAC_TRANSPORT` / `ARASAAC_HOST` /
+`ARASAAC_PORT` (CLI flags override). The container runs unprivileged with a
+writable `output` volume; pictograms sit in their own layer, so code-only
+rebuilds do not re-copy them.
+
+### Library
+
+```python
+from arasaac_pictograms import Entry, SheetOptions, render_and_save, render_layout_and_save
+
+render_and_save(
+    [Entry("icons/3123_Regen.png", role="NOUN"), "36081_alle.png"],
+    ["strip.png", "strip.pdf"],
+    SheetOptions(sentence="Es regnet.", labels=True),
+    icons_dir="icons",
+)
+
+render_layout_and_save(
+    {
+        "sentence": "Stundenplan",
+        "layout": {
+            "type": "grid",
+            "columns": ["Montag", "Dienstag"],
+            "rows": [{"header": "1.", "cells": ["36373_Mathe.png", "10258_Sport.png"]}],
+        },
+    },
+    ["stundenplan.png"],
+    SheetOptions(page_size="a4-landscape", labels=False),
+    icons_dir="icons",
+)
 ```
 
 ## Hard-won invariants & gotchas
