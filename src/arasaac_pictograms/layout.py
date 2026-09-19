@@ -33,7 +33,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 # Constants
 # --------------------------------------------------------------------------- #
 
-#: Fitzgerald-key colours, keyed by role name (see ``prompt.md``).
+#: Fitzgerald-key colours, keyed by role name (see ``scripts/prompt.md``).
 ROLE_COLORS: dict[str, str] = {
     "PERSON": "#FFC800",
     "NOUN": "#F58220",
@@ -368,7 +368,7 @@ def render_and_save(
 
 
 # --------------------------------------------------------------------------- #
-# JSON contract (see prompt.md)
+# JSON contract (see scripts/prompt.md)
 # --------------------------------------------------------------------------- #
 
 

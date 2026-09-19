@@ -420,11 +420,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--transport",
         choices=["stdio", "http", "sse"],
-        default="stdio",
-        help="MCP transport (default: stdio).",
+        default=os.environ.get("ARASAAC_TRANSPORT", "stdio"),
+        help="MCP transport (default: ARASAAC_TRANSPORT or stdio).",
     )
-    parser.add_argument("--host", default="127.0.0.1", help="Host for http/sse.")
-    parser.add_argument("--port", type=int, default=8000, help="Port for http/sse.")
+    parser.add_argument(
+        "--host",
+        default=os.environ.get("ARASAAC_HOST", "127.0.0.1"),
+        help="Host for http/sse (default: ARASAAC_HOST or 127.0.0.1).",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=int(os.environ.get("ARASAAC_PORT", "8000")),
+        help="Port for http/sse (default: ARASAAC_PORT or 8000).",
+    )
     parser.add_argument(
         "--icons-dir",
         type=Path,

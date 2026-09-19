@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """Offline tests for the Python catalog and the MCP server (no LLM needed).
 
-Mirrors the contract checked by ``scripts/test_extension.mjs`` for the pi tools:
-word-only output, synonym hits, label round-trip, real rendering — here against
-the shared Python core and the MCP server (in-memory, no network).
+Checks the word contract: word-only output, synonym hits, label round-trip,
+real rendering — against the Python core and the MCP server (in-memory, no
+network).
 
 Run from the repo root:
     uv run --extra mcp python scripts/test_mcp.py

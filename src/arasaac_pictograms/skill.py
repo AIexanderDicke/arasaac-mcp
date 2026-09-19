@@ -1,6 +1,6 @@
 """Locate and read the ``arasaac-pictograms`` Agent Skill.
 
-The skill files are generated from ``prompt.md`` by ``scripts/build_skill.py``.
+The skill files are generated from ``scripts/prompt.md`` by ``scripts/build_skill.py``.
 The MCP server reuses them as its prompt and resource, so the recipe has exactly
 one source of truth.
 """
@@ -47,7 +47,7 @@ def reference_paths() -> list[Path]:
 def rules_text() -> str:
     """The full recipe: ``SKILL.md`` followed by every reference document.
 
-    Falls back to ``prompt.md`` and finally to an embedded minimal summary, so
+    Falls back to ``scripts/prompt.md`` and finally to an embedded minimal summary, so
     the MCP prompt keeps working in an installed wheel.
     """
     directory = skill_dir()
@@ -57,7 +57,7 @@ def rules_text() -> str:
             parts.append(path.read_text(encoding="utf-8").strip())
         return "\n\n---\n\n".join(parts)
 
-    prompt = _REPO_ROOT / "prompt.md"
+    prompt = _REPO_ROOT / "scripts" / "prompt.md"
     if prompt.is_file():
         return prompt.read_text(encoding="utf-8").strip()
 

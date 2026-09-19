@@ -3,12 +3,12 @@
 Turn an ordered list of ARASAAC pictograms into a single image or PDF — a
 *sentence strip* for AAC (augmentative and alternative communication).
 
-The bundled agent goes one step further: it takes a German text — a sentence,
-a situation, a rule, a routine or a request — and **designs** the pictogram
-sequence that conveys it as clearly as possible. The target audience is people
-with limited reading or language comprehension, especially **children in
-special education**. See [`prompt.md`](./prompt.md) for the rules and
-[`CONCEPT.md`](./CONCEPT.md) for the background.
+The bundled tools go one step further: given a German text — a sentence,
+a situation, a rule, a routine or a request — the model **designs** the pictogram
+sequence that conveys it as clearly as possible, and the tools render it. The
+target audience is people with limited reading or language comprehension,
+especially **children in special education**. See [`scripts/prompt.md`](./scripts/prompt.md) for
+the rules and [`CONCEPT.md`](./CONCEPT.md) for the background.
 
 ## Install
 
@@ -109,15 +109,14 @@ card sheet (`row` of `card`s + `arrow`, dashed consequence boxes) is in
 Roles and their colours: `PERSON` yellow, `NOUN` orange, `VERB` green,
 `QUALITY` blue, `SOCIAL` pink, `MISC` grey.
 
-## Agent (pi)
+## Tools
 
-The agent works on **any German input**, not just sentences. It first works out
-the goal and core message, then designs a sequence that is understandable from
-the pictures alone (concrete icons, everyday words, ≤ ~5 pictograms, order =
-meaning). The rules live in [`prompt.md`](./prompt.md).
+The tools work on **any German input**, not just sentences. The model first
+works out the goal and core message, then designs a sequence that is
+understandable from the pictures alone (concrete icons, everyday words, ≤ ~5
+pictograms, order = meaning). The rules live in [`scripts/prompt.md`](./scripts/prompt.md).
 
-`.pi/extensions/pictograms.ts` registers four **word-based** tools (the agent
-never sees numeric IDs or file names):
+They are **word-based** — the model never sees numeric IDs or file names:
 
 | Tool | Purpose |
 | --- | --- |
@@ -126,28 +125,15 @@ never sees numeric IDs or file names):
 | `render_pictogram_sheet({ words, roles?, sentence?, meaning? })` | Render the ordered words to a single strip image. |
 | `render_pictogram_layout({ layout, sentence?, page_size? })` | Render a free arrangement — timetable `grid`, `card`s with `arrow`s, or a `canvas`. Icon nodes use `word`. |
 
-`.pi/agents/pictogram-transcriber.md` holds the system prompt and a `tools:`
-allowlist, so the agent can call **only** these four tools. The model is pinned
-in its frontmatter (`model: deepseek-v4.1-flash`).
-
-The agent talks **German**: replies, the `sentence` header, the `meaning`
+The model talks **German**: replies, the `sentence` header, the `meaning`
 explanation, the `notes` and alternative labels are all in German, regardless
-of the English tool output. See [`prompt.md`](./prompt.md) §0.
-
-```bash
-# Run the agent headless (uses only the project tools):
-python scripts/run_transcriber.py "Wenn es regnet, müssen alle Schüler drin bleiben."
-python scripts/run_transcriber.py --mode json "…" > trace.jsonl   # full tool trace
-
-# Test the tools without an LLM:
-node scripts/test_extension.mjs
-```
+of the English tool output. See [`scripts/prompt.md`](./scripts/prompt.md) §0.
 
 Rendering runs `uv run make-sheet`, so **no venv activation is needed**.
 
 ## MCP server
 
-The same four word-based tools are exposed over **MCP**, so any MCP-capable host
+These four word-based tools are exposed over **MCP**, so any MCP-capable host
 (Claude Desktop, IDEs, other agents) can drive them. The host brings the model —
 the server needs **no API key** and runs no LLM; it only searches, shows and
 renders pictograms.
@@ -207,11 +193,11 @@ For a long-running container or HTTP host, point the client at
 ## Skill
 
 `skills/arasaac-pictograms/` is an [Agent Skill](https://agentskills.io/specification)
-(SKILL.md + on-demand `references/`). It is **generated from `prompt.md`** — the
+(SKILL.md + on-demand `references/`). It is **generated from `scripts/prompt.md`** — the
 single source of truth — so the recipe is never duplicated by hand:
 
 ```bash
-python scripts/build_skill.py           # regenerate after editing prompt.md
+python scripts/build_skill.py           # regenerate after editing scripts/prompt.md
 python scripts/build_skill.py --check   # fail if the skill is stale
 ```
 
@@ -225,12 +211,14 @@ The image bundles the code, the fonts and the ~338 MB pictogram set, so it runs
 
 ```bash
 docker build -t arasaac-mcp .
-docker run --rm -p 8000:8000 arasaac-mcp            # streamable HTTP on :8000/mcp
-docker run --rm -i arasaac-mcp --transport stdio    # stdio, for a local host
+docker run --rm -p 8000:8000 arasaac-mcp --transport http --host 0.0.0.0   # :8000/mcp
+docker run --rm -i arasaac-mcp --transport stdio                            # stdio
 ```
 
-Or `docker compose up --build`. The pictograms go into their own image layer,
-so rebuilding after a code change does not re-copy them.
+Or `docker compose up --build`, which sets the transport, host and port via
+`ARASAAC_TRANSPORT` / `ARASAAC_HOST` / `ARASAAC_PORT` (the CLI flags override
+them). The pictograms go into their own image layer, so rebuilding after a code
+change does not re-copy them.
 
 ## Library
 
@@ -265,17 +253,17 @@ render_layout_and_save(
 - `download_icons.py` — download all ARASAAC pictograms for a language.
 - `icons/` — ~13,800 pictograms (`[id]_[description].png`).
 - `src/arasaac_pictograms/layout.py` — Pillow-based composition (strips + free layout trees).
-- `src/arasaac_pictograms/catalog.py` — word-based search/resolution shared with the MCP server.
+- `src/arasaac_pictograms/catalog.py` — word-based search/resolution for the tools.
 - `src/arasaac_pictograms/cli.py` — the `make-sheet` command.
 - `src/arasaac_pictograms/mcp.py` — the `arasaac-mcp` MCP server.
 - `src/arasaac_pictograms/skill.py` — locates/reads the generated Agent Skill.
 - `skills/arasaac-pictograms/` — generated Agent Skill (SKILL.md + references).
 - `Dockerfile`, `docker-compose.yml`, `.dockerignore` — self-contained image.
 - `examples/mcp.json` — MCP host config template.
-- `scripts/build_skill.py` — generate the skill from `prompt.md` (`--check`).
+- `scripts/build_skill.py` — generate the skill from `scripts/prompt.md` (`--check`).
 - `scripts/test_mcp.py` — offline catalog + MCP tests (no LLM).
 - `examples/` — sample layout JSON (timetable, cards).
-- `prompt.md` — rules for the model that picks the pictograms.
+- `scripts/prompt.md` — rules for the model that picks the pictograms.
 - `CONCEPT.md` — concept and background.
 
 ## License

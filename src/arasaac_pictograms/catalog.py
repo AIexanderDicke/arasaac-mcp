@@ -1,13 +1,11 @@
 """Pictogram catalog: word-based search and resolution over ARASAAC icons.
 
-This is the Python counterpart of the word-based logic in
-``.pi/extensions/pictograms.ts`` (the pi tools) and is the shared core behind the
-MCP server.  Both surfaces expose the same contract: the caller searches and
+This is the word-based core behind the MCP server.  The caller searches and
 refers to pictograms by German **word**, never by numeric id or file name.
 
 The catalog reads ``[id]_[description].png`` files plus the optional
 ``metadata_de.json`` shipped alongside them (ARASAAC keywords, tags and
-categories).  Keep this module free of pi/agent specifics and of Pillow: it only
+categories).  Keep this module free of host specifics and of Pillow: it only
 maps words to pictograms.
 """
 
@@ -20,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-#: Roles accepted in layout trees (Fitzgerald key, see ``prompt.md``).
+#: Roles accepted in layout trees (Fitzgerald key, see ``scripts/prompt.md``).
 VALID_ROLES: tuple[str, ...] = ("PERSON", "NOUN", "VERB", "QUALITY", "SOCIAL", "MISC")
 
 
@@ -314,7 +312,7 @@ class Catalog:
     def resolve_layout_node(self, node: object) -> dict | None:
         """Recursively replace ``word`` with ``file``/``concept`` in a layout tree.
 
-        See ``prompt.md`` §9 for the node types.  Strings are icon words,
+        See ``scripts/prompt.md`` §9 for the node types.  Strings are icon words,
         lists become columns, and grid cells stay positional (empty = ``None``).
         """
         if node is None:
