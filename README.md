@@ -21,6 +21,12 @@ uv sync
 This installs [Pillow](https://python-pillow.org/) (image composition, can also
 write one-page PDFs). Noto Sans fonts (umlaut-capable) live in `assets/fonts/`.
 
+The MCP server is an optional extra (it pulls in [FastMCP](https://gofastmcp.com/)):
+
+```bash
+uv sync --extra mcp
+```
+
 ## Usage
 
 ```bash
@@ -139,6 +145,47 @@ node scripts/test_extension.mjs
 
 Rendering runs `uv run make-sheet`, so **no venv activation is needed**.
 
+## MCP server
+
+The same four word-based tools are exposed over **MCP**, so any MCP-capable host
+(Claude Desktop, IDEs, other agents) can drive them. The host brings the model —
+the server needs **no API key** and runs no LLM; it only searches, shows and
+renders pictograms.
+
+The recipe ships as an MCP **prompt** (`pictogram_transcriber`) and the
+`arasaac-pictograms` **Agent Skill**; the critical rules are also in the tool
+descriptions, which every host puts in context.
+
+```bash
+uv run --extra mcp arasaac-mcp                    # stdio (default)
+uv run --extra mcp arasaac-mcp --transport http   # streamable HTTP on :8000
+uv run --extra mcp python scripts/test_mcp.py     # offline tests, no LLM
+```
+
+| MCP surface | Name | Purpose |
+| --- | --- | --- |
+| tool | `search_pictograms` | German word search (descriptions + metadata) |
+| tool | `view_pictogram` | pictogram image for visual verification |
+| tool | `render_pictogram_sheet` | ordered word sequence → strip image |
+| tool | `render_pictogram_layout` | layout tree (grid/cards/canvas) → image |
+| prompt | `pictogram_transcriber` | full recipe + the German text |
+| resource | `arasaac://skill` | the Agent Skill (`SKILL.md`) |
+| resource | `arasaac://rules` | the full recipe (skill + references) |
+
+## Skill
+
+`skills/arasaac-pictograms/` is an [Agent Skill](https://agentskills.io/specification)
+(SKILL.md + on-demand `references/`). It is **generated from `prompt.md`** — the
+single source of truth — so the recipe is never duplicated by hand:
+
+```bash
+python scripts/build_skill.py           # regenerate after editing prompt.md
+python scripts/build_skill.py --check   # fail if the skill is stale
+```
+
+Harnesses that understand the Agent Skills standard discover it by description
+and load the full rules on demand.
+
 ## Library
 
 ```python
@@ -172,7 +219,13 @@ render_layout_and_save(
 - `download_icons.py` — download all ARASAAC pictograms for a language.
 - `icons/` — ~13,800 pictograms (`[id]_[description].png`).
 - `src/arasaac_pictograms/layout.py` — Pillow-based composition (strips + free layout trees).
+- `src/arasaac_pictograms/catalog.py` — word-based search/resolution shared with the MCP server.
 - `src/arasaac_pictograms/cli.py` — the `make-sheet` command.
+- `src/arasaac_pictograms/mcp.py` — the `arasaac-mcp` MCP server.
+- `src/arasaac_pictograms/skill.py` — locates/reads the generated Agent Skill.
+- `skills/arasaac-pictograms/` — generated Agent Skill (SKILL.md + references).
+- `scripts/build_skill.py` — generate the skill from `prompt.md` (`--check`).
+- `scripts/test_mcp.py` — offline catalog + MCP tests (no LLM).
 - `examples/` — sample layout JSON (timetable, cards).
 - `prompt.md` — rules for the model that picks the pictograms.
 - `CONCEPT.md` — concept and background.

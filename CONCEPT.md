@@ -164,10 +164,17 @@ projektspezifische Tools hat, statt dem Modell freien Shell-Zugriff zu geben.
     Kandidaten wirklich ansieht (prompt.md-Regel „verify visually“).
   - `render_pictogram_sheet` — rendert die gewählte Folge als Bild/PDF
     (der in `layout.py` gebaute Renderer).
-- **MCP-Server + Skill.** Dieselben Tools werden später als MCP-Server
-  bereitgestellt; ein Skill bündelt den Workflow/die Regeln aus `prompt.md`.
-  So kann der Transcriber in verschiedenen Harnesses (pi, Claude, …) laufen.
-  Der Skill entspricht der heutigen Agent-Definition.
+- **MCP-Server + Skill (umgesetzt).** Dieselben vier wortbasierten Tools werden
+  über einen **MCP-Server** (`src/arasaac_pictograms/mcp.py`, Kommando
+  `arasaac-mcp`) bereitgestellt: `search_pictograms`, `view_pictogram`,
+  `render_pictogram_sheet`, `render_pictogram_layout`. Das Modell bringt der
+  Host mit — der Server hält keinen API-Key und führt kein LLM aus. Das Regelwerk
+  aus `prompt.md` wird als MCP-**Prompt** (`pictogram_transcriber`) und als MCP-
+  **Resource** (`arasaac://skill`, `arasaac://rules`) ausgeliefert und liegt
+  zusätzlich als portabler **Agent Skill** unter `skills/arasaac-pictograms/`
+  (SKILL.md + `references/`, per `scripts/build_skill.py` aus `prompt.md`
+  generiert). So kann der Transcriber in verschiedenen Harnesses (pi, Claude, …)
+  laufen; die Wortauflösung liegt dafür gemeinsam in `catalog.py`.
 - **Bessere Icon-Beschreibungen.** Die ARASAAC-Keywords sind knapp und teils
   irreführend (Beispiele in §3). Perspektivisch eigene, geprüfte Beschreibungen
   und Synonym-/Wortstamm-Listen (Schüler/Schülerin, Singular/Plural) sowie
