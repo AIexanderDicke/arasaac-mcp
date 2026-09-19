@@ -250,7 +250,15 @@ reading direction (left→right, top→bottom). Pass `sentence` (and optionally
 
 ## 11. Output contract
 
-Return **JSON** with the primary sequence and up to two alternatives, followed
+**Chat with a user (interactive host):** reply in short, easy German prose —
+one sentence naming the depicted content, the `meaning` line, and the picture
+link as a plain link. **Do not print the JSON contract**, the tool arguments
+or the `Datei:` path — the user needs the picture and a short explanation,
+nothing else. The host shows the image from the `Bild:` URL itself.
+
+**Programmatic use / reviewer:** when the caller asks for the structured
+contract (e.g. a headless transcriber or a developer auditing the result),
+return **JSON** with the primary sequence and up to two alternatives, followed
 by a one-line comma-separated list of **words**.
 
 ```json
@@ -283,7 +291,7 @@ decision. `notes` flags anything uncertain. All prose and labels are German.
 For a **layout** result (§9) the same JSON is used, but `sequence`/`alternatives`
 are replaced by a `layout` tree (icon nodes name a `word`) and the footer line
 lists the icon words in reading order. The rendered image is what matters; the
-JSON documents it for a reviewer.
+JSON documents it for a reviewer — and stays out of chat replies.
 
 ## 12. Worked examples
 

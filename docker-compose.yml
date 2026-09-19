@@ -1,0 +1,17 @@
+services:
+  arasaac-mcp:
+    build: .
+    image: arasaac-mcp
+    ports:
+      - "8000:8000"
+    environment:
+      ARASAAC_TRANSPORT: http
+      ARASAAC_HOST: 0.0.0.0
+      ARASAAC_PORT: "8000"
+      ARASAAC_PUBLIC_BASE_URL: ${ARASAAC_PUBLIC_BASE_URL:-http://localhost:8000}
+    volumes:
+      - arasaac-output:/app/output
+    restart: unless-stopped
+
+volumes:
+  arasaac-output:

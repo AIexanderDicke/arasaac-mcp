@@ -7,7 +7,7 @@ Inhalt verstehen können. Zielgruppe sind besonders **Kinder in der
 Sonderpädagogik**: Die Folge soll **auf einen Blick** verständlich sein, auch
 ohne lesen zu können.
 
-Der zugehörige Modell-Prompt liegt in [`prompt.md`](./prompt.md).
+Der zugehörige Modell-Prompt liegt in [`scripts/prompt.md`](./scripts/prompt.md).
 
 ---
 
@@ -138,14 +138,14 @@ Satz
 - **Lizenz**: ARASAAC-Piktogramme stehen unter **CC BY-NC-SA** (Namensnennung,
   nicht kommerziell, Weitergabe unter gleichen Bedingungen) — bei
   Veröffentlichung beachten.
-- **Nächter konkreter Schritt**: `prompt.md` an einer kleinen Satzsammlung
+- **Nächter konkreter Schritt**: `scripts/prompt.md` an einer kleinen Satzsammlung
   testen und die Regeln anhand der Ergebnisse schärfen.
 
 ## 7. Projektdateien
 
 - `download_icons.py` — lädt alle ARASAAC-Piktogramme für eine Sprache.
 - `icons/` — ~13.800 Piktogramme (`[id]_[beschreibung].png`).
-- `prompt.md` — Prompt/Regelwerk für das Modell.
+- `scripts/prompt.md` — Prompt/Regelwerk für das Modell.
 - `examples/` — Beispiel-Layouts (Stundenplan, Karten mit Pfeil).
 - `CONCEPT.md` — dieses Dokument.
 
@@ -161,13 +161,20 @@ projektspezifische Tools hat, statt dem Modell freien Shell-Zugriff zu geben.
     (`icons/metadata_de.json`: Keywords, Tags, Kategorien; deckt Synonyme wie
     *PKW/KFZ* für *Auto* ab).
   - `view_pictogram` — liefert das Bild als Bild-Content, damit das Modell
-    Kandidaten wirklich ansieht (prompt.md-Regel „verify visually“).
+    Kandidaten wirklich ansieht (scripts/prompt.md-Regel „verify visually“).
   - `render_pictogram_sheet` — rendert die gewählte Folge als Bild/PDF
     (der in `layout.py` gebaute Renderer).
-- **MCP-Server + Skill.** Dieselben Tools werden später als MCP-Server
-  bereitgestellt; ein Skill bündelt den Workflow/die Regeln aus `prompt.md`.
-  So kann der Transcriber in verschiedenen Harnesses (pi, Claude, …) laufen.
-  Der Skill entspricht der heutigen Agent-Definition.
+- **MCP-Server + Skill (umgesetzt).** Dieselben vier wortbasierten Tools werden
+  über einen **MCP-Server** (`src/arasaac_pictograms/mcp.py`, Kommando
+  `arasaac-mcp`) bereitgestellt: `search_pictograms`, `view_pictogram`,
+  `render_pictogram_sheet`, `render_pictogram_layout`. Das Modell bringt der
+  Host mit — der Server hält keinen API-Key und führt kein LLM aus. Das Regelwerk
+  aus `scripts/prompt.md` wird als MCP-**Prompt** (`pictogram_transcriber`) und als MCP-
+  **Resource** (`arasaac://skill`, `arasaac://rules`) ausgeliefert und liegt
+  zusätzlich als portabler **Agent Skill** unter `skills/arasaac-pictograms/`
+  (SKILL.md + `references/`, per `scripts/build_skill.py` aus `scripts/prompt.md`
+  generiert). So kann der Transcriber in verschiedenen MCP-fähigen Hosts
+  (Claude Desktop, IDEs, …) laufen; die Wortauflösung liegt in `catalog.py`.
 - **Bessere Icon-Beschreibungen.** Die ARASAAC-Keywords sind knapp und teils
   irreführend (Beispiele in §3). Perspektivisch eigene, geprüfte Beschreibungen
   und Synonym-/Wortstamm-Listen (Schüler/Schülerin, Singular/Plural) sowie
@@ -182,9 +189,7 @@ projektspezifische Tools hat, statt dem Modell freien Shell-Zugriff zu geben.
 - **Evaluation.** Kleine Satzsammlung, mit der der Agent wiederholt getestet
   wird; Bewertung durch Fachpersonen (Verständlichkeit, nicht Worttreue).
 
-Referenz-Implementierung für den ersten Agenten:
+Referenz-Implementierung:
 
-- `.pi/extensions/pictograms.ts` — registriert die vier Tools.
-- `.pi/agents/pictogram-transcriber.md` — Systemprompt (aus `prompt.md`) plus
-  `tools:`-Allowlist; so hat der Agent **nur** diese Tools.
-- `scripts/run_transcriber.py` — Test-Harness, der den Agenten headless startet.
+- `src/arasaac_pictograms/mcp.py` — stellt die vier Tools, den MCP-Prompt und die
+  Resources bereit; die Wortlogik liegt in `catalog.py`.
