@@ -1,0 +1,20 @@
+[project]
+name = "arasaac-pictograms"
+version = "0.1.0"
+description = "Turn an ordered list of ARASAAC pictograms into a sentence strip (image/PDF)"
+readme = "README.md"
+authors = [
+    { name = "Alexander Dicke", email = "adicke.math@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "pillow>=12.3.0",
+]
+
+[project.scripts]
+arasaac-pictograms = "arasaac_pictograms:main"
+make-sheet = "arasaac_pictograms:main"
+
+[build-system]
+requires = ["uv_build>=0.12.17,<0.13.0"]
+build-backend = "uv_build"
