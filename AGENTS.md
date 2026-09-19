@@ -163,13 +163,16 @@ python scripts/run_transcriber.py --mode json "…" > trace.jsonl   # full tool 
   the MCP prompt/resource serve the generated skill. Keep them identical.
 
 ### MCP Apps viewer
-- The render tools declare `ui://arasaac/sheet.html` (`meta["ui"]["resourceUri"]`)
+- The render tools declare `ui://arasaac/viewer.html` (`meta["ui"]["resourceUri"]`)
   and the server serves that HTML (`SHEET_VIEW_HTML` in `mcp.py`). It uses the
   standard **MCP Apps** extension (SEP-1865) via the `@modelcontextprotocol/ext-apps`
   bridge — **host-agnostic**, no client-specific metadata (no `openai/*` keys).
 - Why: a plain `image` tool result reaches the model but is not shown to the user
   in most hosts. The widget renders it. Keep the `image` result too (the model
   needs it for `view_pictogram`-style verification).
+- Return the image in **both** places: `content` (model) and `structuredContent`
+  (the view). Hosts pass `structuredContent` to the app reliably, but do not
+  always forward `content` image blocks; the viewer prefers it and falls back.
 - The CSP `resourceDomains` must list every origin the widget loads; bump the
   pinned `_EXT_APPS_URL` when the ext-apps SDK changes.
 

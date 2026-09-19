@@ -69,10 +69,23 @@ icons, verify ambiguous candidates with view_pictogram, keep the sequence short
 # reaches the model.  This uses the standard `ui://` + ext-apps bridge; it is
 # not tailored to any single host.
 
-SHEET_VIEW_URI = "ui://arasaac/sheet.html"
+SHEET_VIEW_URI = "ui://arasaac/viewer.html"
 _EXT_APPS_CDN = "https://unpkg.com"
 _EXT_APPS_URL = f"{_EXT_APPS_CDN}/@modelcontextprotocol/ext-apps@1.0.1/app-with-deps"
 
+# Metadata attached to both render tools: point the host at the viewer and
+# allow it to load the bridge script.  Standard MCP Apps metadata only.
+_TOOL_UI_META: dict[str, Any] = {
+    "ui": {
+        "resourceUri": SHEET_VIEW_URI,
+        "csp": {"resourceDomains": [_EXT_APPS_CDN], "connectDomains": [_EXT_APPS_CDN]},
+    },
+    "ui/resourceUri": SHEET_VIEW_URI,
+}
+
+# Host-agnostic viewer.  Primary path is the standard MCP Apps bridge
+# (ext-apps); if the host instead exposes the OpenAI Apps SDK compatibility
+# API, that is used as a fallback.  A status line makes failures visible.
 SHEET_VIEW_HTML = """<!DOCTYPE html>
 <html lang="de">
 <head>
@@ -91,7 +104,8 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
     .caption { font-size: 14px; text-align: center; white-space: pre-line; }
     .download { font-size: 12px; padding: 6px 12px; border-radius: 8px;
                 border: 1px solid currentColor; text-decoration: none; }
-    .empty { opacity: 0.6; font-size: 13px; padding: 16px; }
+    .status { opacity: 0.55; font-size: 11px; text-align: center;
+              font-family: ui-monospace, monospace; word-break: break-word; }
   </style>
 </head>
 <body>
@@ -99,36 +113,40 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
     <img id="sheet" alt="Piktogrammfolge" hidden>
     <div id="caption" class="caption"></div>
     <a id="download" class="download" download="piktogramme.png" hidden>Bild herunterladen</a>
-    <div id="empty" class="empty">Warte auf Piktogramme …</div>
+    <div id="status" class="status">viewer v2 · Skript lädt …</div>
   </div>
+  <script>
+    window.__arasaacStatus = function (message) {
+      var el = document.getElementById("status");
+      if (el) el.textContent = "viewer v2 · " + message;
+    };
+    window.addEventListener("error", function (e) {
+      window.__arasaacStatus("Fehler: " + (e.message || e.error));
+    });
+    window.addEventListener("unhandledrejection", function (e) {
+      window.__arasaacStatus("Promise-Fehler: " + e.reason);
+    });
+  </script>
   <script type="module">
-    import { App } from "__EXT_APPS_URL__";
-
-    const app = new App({ name: "ARASAAC Sheet Viewer", version: "1.0.0" });
+    const status = window.__arasaacStatus;
     const img = document.getElementById("sheet");
     const caption = document.getElementById("caption");
     const download = document.getElementById("download");
-    const empty = document.getElementById("empty");
 
-    // The host forwards the tool result. Prefer structuredContent (hosts
-    // reliably pass it to the view); fall back to the image content block.
     function show(src, text) {
       if (text) caption.textContent = text;
-      if (!src) {
-        empty.textContent = "Kein Bild im Tool-Ergebnis.";
-        empty.hidden = false;
-        return;
-      }
+      if (!src) { status("Ergebnis ohne Bild empfangen"); return; }
       img.src = src;
       img.hidden = false;
       download.href = src;
       download.hidden = false;
-      empty.hidden = true;
+      status("Bild angezeigt");
     }
 
-    app.ontoolresult = (params) => {
-      const blocks = params.content || [];
-      const structured = params.structuredContent || params.structured_content || {};
+    // Accept the MCP Apps shape (structuredContent + content), and be lenient.
+    function fromResult(structured, blocks) {
+      structured = structured || {};
+      blocks = blocks || [];
       let src = typeof structured.image === "string" ? structured.image : null;
       if (!src) {
         const image = blocks.find((b) => b.type === "image");
@@ -141,24 +159,46 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
       const text = structured.words
         || blocks.filter((b) => b.type === "text").map((b) => b.text).join("\n");
       show(src, text);
-    };
-
-    function applyHostContext(ctx) {
-      const insets = ctx && ctx.safeAreaInsets;
-      if (!insets) return;
-      document.body.style.paddingTop = `${insets.top}px`;
-      document.body.style.paddingRight = `${insets.right}px`;
-      document.body.style.paddingBottom = `${insets.bottom}px`;
-      document.body.style.paddingLeft = `${insets.left}px`;
     }
-    app.onhostcontextchanged = applyHostContext;
 
-    try {
-      await app.connect();
-      applyHostContext(app.getHostContext());
-    } catch (error) {
-      empty.textContent = "Verbindung zum Host fehlgeschlagen: " + error;
-      empty.hidden = false;
+    // 1) Standard, host-agnostic MCP Apps bridge.
+    (async () => {
+      status("verbinde (ext-apps) …");
+      try {
+        const { App } = await import("__EXT_APPS_URL__");
+        const app = new App({ name: "ARASAAC Sheet Viewer", version: "2.0.0" });
+        app.ontoolresult = (params) =>
+          fromResult(params.structuredContent || params.structured_content, params.content);
+        app.onhostcontextchanged = (ctx) => {
+          const insets = ctx && ctx.safeAreaInsets;
+          if (!insets) return;
+          document.body.style.paddingTop = `${insets.top}px`;
+          document.body.style.paddingRight = `${insets.right}px`;
+          document.body.style.paddingBottom = `${insets.bottom}px`;
+          document.body.style.paddingLeft = `${insets.left}px`;
+        };
+        await app.connect();
+        status("ext-apps verbunden, warte auf Ergebnis …");
+      } catch (error) {
+        status("ext-apps nicht verfügbar (" + error + ")");
+      }
+    })();
+
+    // 2) OpenAI Apps SDK compatibility API, if the host provides it.
+    function fromOpenAI() {
+      const openai = window.openai;
+      if (!openai) return false;
+      const output = openai.toolOutput;
+      if (output && (output.image || output.words)) {
+        status("window.openai Ergebnis");
+        fromResult(output, []);
+      } else {
+        status("window.openai erkannt (noch kein Ergebnis)");
+      }
+      return true;
+    }
+    if (!fromOpenAI()) {
+      window.addEventListener("openai:set_globals", fromOpenAI);
     }
   </script>
 </body>
@@ -377,9 +417,7 @@ def create_server(
         """
         return view(catalog, word)
 
-    @server.tool(
-        meta={"ui": {"resourceUri": SHEET_VIEW_URI}, "ui/resourceUri": SHEET_VIEW_URI},
-    )
+    @server.tool(meta=_TOOL_UI_META)
     def render_pictogram_sheet(
         words: list[str],
         roles: list[str] | None = None,
@@ -399,9 +437,7 @@ def create_server(
             catalog, words, roles, sentence, meaning, labels, columns, icon_size, debug_dir
         )
 
-    @server.tool(
-        meta={"ui": {"resourceUri": SHEET_VIEW_URI}, "ui/resourceUri": SHEET_VIEW_URI},
-    )
+    @server.tool(meta=_TOOL_UI_META)
     def render_pictogram_layout(
         layout: dict[str, Any],
         sentence: str | None = None,

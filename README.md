@@ -169,7 +169,7 @@ uv run --extra mcp python scripts/test_mcp.py     # offline tests, no LLM
 | tool | `render_pictogram_sheet` | ordered word sequence → strip image |
 | tool | `render_pictogram_layout` | layout tree (grid/cards/canvas) → image |
 | prompt | `pictogram_transcriber` | full recipe + the German text |
-| resource | `ui://arasaac/sheet.html` | MCP Apps viewer that shows the sheet inline |
+| resource | `ui://arasaac/viewer.html` | MCP Apps viewer that shows the sheet inline |
 | resource | `arasaac://skill` | the Agent Skill (`SKILL.md`) |
 | resource | `arasaac://rules` | the full recipe (skill + references) |
 
