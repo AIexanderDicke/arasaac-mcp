@@ -203,9 +203,12 @@ def _render_result(
 
     The picture is not inlined: hosts either drop image blocks or dump the
     base64 as raw text into the conversation.  Instead the saved PNG is served
-    under ``/sheet/<name>`` and the result carries ``image_url`` — hosts show
-    that URL as a web preview.  Without a saved file (``--no-save``) the image
-    still travels as an image content block for the model.
+    under ``/sheet/<name>`` and the URL is reported in the text block AND in
+    ``image_url`` (structuredContent) — the host shows it as a web preview.
+    The URL must stay in the text (the preview is built from it); the render
+    tools' descriptions instruct the model not to echo it as a markdown image.
+    Without a saved file (``--no-save``) the image still travels as an image
+    content block for the model.
     """
     structured: dict[str, Any] = {
         "sentence": sentence,
@@ -216,6 +219,7 @@ def _render_result(
         structured["words"] = words
     if saved is not None:
         url = f"{public_base_url()}/sheet/{saved.name}"
+        lines.append(f"Bild: {url}")
         structured["image_url"] = url
         return ToolResult(
             content=[_text("\n".join(lines))],
