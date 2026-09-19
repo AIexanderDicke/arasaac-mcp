@@ -169,8 +169,15 @@ uv run --extra mcp python scripts/test_mcp.py     # offline tests, no LLM
 | tool | `render_pictogram_sheet` | ordered word sequence → strip image |
 | tool | `render_pictogram_layout` | layout tree (grid/cards/canvas) → image |
 | prompt | `pictogram_transcriber` | full recipe + the German text |
+| resource | `ui://arasaac/sheet.html` | MCP Apps viewer that shows the sheet inline |
 | resource | `arasaac://skill` | the Agent Skill (`SKILL.md`) |
 | resource | `arasaac://rules` | the full recipe (skill + references) |
+
+The two render tools also declare that `ui://` resource via `ui.resourceUri`, so
+hosts that support the **MCP Apps** extension (SEP‑1865) render the sheet inline
+in the conversation. This is the standard, host-agnostic mechanism — the plain
+`image` tool result only reaches the model; the widget is what shows the picture
+to the user. No client-specific metadata is used.
 
 For local debugging, every rendered sheet is *also* written to disk — `output/`
 by default, override with `--output-dir` / `ARASAAC_OUTPUT_DIR`, disable with

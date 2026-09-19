@@ -90,7 +90,8 @@ async def exercise() -> None:
     out_dir = Path(tempfile.mkdtemp(prefix="arasaac-mcp-test-"))
     server = create_server(ROOT / "icons", output_dir=out_dir)
     async with Client(server) as client:
-        tools = {tool.name for tool in await client.list_tools()}
+        tool_list = await client.list_tools()
+        tools = {tool.name for tool in tool_list}
         check(
             tools == {
                 "search_pictograms",
@@ -100,10 +101,24 @@ async def exercise() -> None:
             },
             f"four tools registered ({sorted(tools)})",
         )
+        sheet_tool = next(t for t in tool_list if t.name == "render_pictogram_sheet")
+        ui_meta = (sheet_tool.meta or {}).get("ui", {})
+        check(
+            ui_meta.get("resourceUri") == "ui://arasaac/sheet.html",
+            "render tool declares the MCP Apps viewer (ui.resourceUri)",
+        )
         prompts = {prompt.name for prompt in await client.list_prompts()}
         check("pictogram_transcriber" in prompts, "prompt registered")
         resources = {str(resource.uri) for resource in await client.list_resources()}
-        check({"arasaac://skill", "arasaac://rules"} <= resources, "resources registered")
+        check(
+            {"arasaac://skill", "arasaac://rules", "ui://arasaac/sheet.html"} <= resources,
+            "resources registered",
+        )
+        viewer = await client.read_resource("ui://arasaac/sheet.html")
+        check(
+            "@modelcontextprotocol/ext-apps" in viewer[0].text and "ontoolresult" in viewer[0].text,
+            "MCP Apps viewer HTML is served",
+        )
 
         result = await client.call_tool("search_pictograms", {"query": "Regen", "limit": 3})
         check("Regen" in result.content[0].text, "search tool answers by word")

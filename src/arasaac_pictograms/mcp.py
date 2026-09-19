@@ -34,10 +34,12 @@ from typing import Any
 
 try:  # optional dependency (see pyproject `[project.optional-dependencies] mcp`)
     from fastmcp import FastMCP
+    from fastmcp.utilities.mime import UI_MIME_TYPE
     from fastmcp.utilities.types import Image as McpImage
     from mcp.types import TextContent
 except ImportError:  # pragma: no cover - only hit without the extra
     FastMCP = None  # type: ignore[assignment]
+    UI_MIME_TYPE = None  # type: ignore[assignment]
     McpImage = None  # type: ignore[assignment]
     TextContent = None  # type: ignore[assignment]
 
@@ -54,6 +56,90 @@ icons, verify ambiguous candidates with view_pictogram, keep the sequence short
 (aim ≤ 5, hard cap ~8) and render it once. Reply in German. See the
 `pictogram_transcriber` prompt for the full rules.\
 """
+
+# --------------------------------------------------------------------------- #
+# MCP Apps viewer (host-agnostic, MCP Apps extension / SEP-1865)
+# --------------------------------------------------------------------------- #
+#
+# Hosts that support MCP Apps render this UI resource inline for the render
+# tools and show the picture to the user — the plain `image` tool result only
+# reaches the model.  This uses the standard `ui://` + ext-apps bridge; it is
+# not tailored to any single host.
+
+SHEET_VIEW_URI = "ui://arasaac/sheet.html"
+_EXT_APPS_CDN = "https://unpkg.com"
+_EXT_APPS_URL = f"{_EXT_APPS_CDN}/@modelcontextprotocol/ext-apps@1.0.1/app-with-deps"
+
+SHEET_VIEW_HTML = """<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="light dark">
+  <title>ARASAAC Piktogramme</title>
+  <style>
+    :root { color-scheme: light dark; }
+    html, body { margin: 0; padding: 0; background: transparent; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+           display: flex; justify-content: center; }
+    .card { display: flex; flex-direction: column; gap: 10px; align-items: center;
+            padding: 12px; max-width: 100%; }
+    img { max-width: 100%; height: auto; border-radius: 10px; background: #fff;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12); }
+    .caption { font-size: 14px; text-align: center; white-space: pre-line; }
+    .download { font-size: 12px; padding: 6px 12px; border-radius: 8px;
+                border: 1px solid currentColor; text-decoration: none; }
+    .empty { opacity: 0.6; font-size: 13px; padding: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <img id="sheet" alt="Piktogrammfolge" hidden>
+    <div id="caption" class="caption"></div>
+    <a id="download" class="download" download="piktogramme.png" hidden>Bild herunterladen</a>
+    <div id="empty" class="empty">Warte auf Piktogramme …</div>
+  </div>
+  <script type="module">
+    import { App } from "__EXT_APPS_URL__";
+
+    const app = new App({ name: "ARASAAC Sheet Viewer", version: "1.0.0" });
+    const img = document.getElementById("sheet");
+    const caption = document.getElementById("caption");
+    const download = document.getElementById("download");
+    const empty = document.getElementById("empty");
+
+    // The host forwards the tool result; render the image it contains.
+    app.ontoolresult = ({ content }) => {
+      const blocks = content || [];
+      const image = blocks.find((b) => b.type === "image");
+      const text = blocks.filter((b) => b.type === "text").map((b) => b.text).join("\n");
+      if (text) caption.textContent = text;
+      if (!image) { empty.textContent = "Kein Bild im Tool-Ergebnis."; return; }
+      const allowed = ["image/png", "image/jpeg", "image/gif"];
+      const mime = allowed.includes(image.mimeType) ? image.mimeType : "image/png";
+      const src = `data:${mime};base64,${image.data}`;
+      img.src = src;
+      img.hidden = false;
+      download.href = src;
+      download.hidden = false;
+      empty.hidden = true;
+    };
+
+    function applyHostContext(ctx) {
+      const insets = ctx && ctx.safeAreaInsets;
+      if (!insets) return;
+      document.body.style.paddingTop = `${insets.top}px`;
+      document.body.style.paddingRight = `${insets.right}px`;
+      document.body.style.paddingBottom = `${insets.bottom}px`;
+      document.body.style.paddingLeft = `${insets.left}px`;
+    }
+    app.onhostcontextchanged = applyHostContext;
+
+    await app.connect();
+    applyHostContext(app.getHostContext());
+  </script>
+</body>
+</html>
+""".replace("__EXT_APPS_URL__", _EXT_APPS_URL)
 
 
 # --------------------------------------------------------------------------- #
@@ -242,7 +328,9 @@ def create_server(
         """
         return view(catalog, word)
 
-    @server.tool
+    @server.tool(
+        meta={"ui": {"resourceUri": SHEET_VIEW_URI}, "ui/resourceUri": SHEET_VIEW_URI},
+    )
     def render_pictogram_sheet(
         words: list[str],
         roles: list[str] | None = None,
@@ -262,7 +350,9 @@ def create_server(
             catalog, words, roles, sentence, meaning, labels, columns, icon_size, debug_dir
         )
 
-    @server.tool
+    @server.tool(
+        meta={"ui": {"resourceUri": SHEET_VIEW_URI}, "ui/resourceUri": SHEET_VIEW_URI},
+    )
     def render_pictogram_layout(
         layout: dict[str, Any],
         sentence: str | None = None,
@@ -293,6 +383,17 @@ def create_server(
             f"{rules_text()}\n\n---\n\n"
             f"Transcribe the following German text into pictograms:\n\n{text}"
         )
+
+    @server.resource(
+        SHEET_VIEW_URI,
+        name="arasaac sheet viewer",
+        description="MCP Apps viewer that renders the generated pictogram sheet.",
+        mime_type=UI_MIME_TYPE,
+        meta={"ui": {"csp": {"resourceDomains": [_EXT_APPS_CDN]}}},
+    )
+    def sheet_viewer() -> str:
+        """The MCP Apps viewer HTML (standard ui:// resource)."""
+        return SHEET_VIEW_HTML
 
     @server.resource(
         "arasaac://skill",
