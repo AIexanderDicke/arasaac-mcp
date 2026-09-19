@@ -140,6 +140,10 @@ async def exercise() -> None:
         debug_files = sorted(out_dir.glob("*.png"))
         check(bool(debug_files), f"render_pictogram_sheet writes a local debug file ({len(debug_files)})")
         check(
+            str((result.structured_content or {}).get("image", "")).startswith("data:image/png;base64,"),
+            "render result carries the image in structuredContent",
+        )
+        check(
             any("Datei:" in part.text for part in result.content if part.type == "text"),
             "render text reports the debug file path",
         )

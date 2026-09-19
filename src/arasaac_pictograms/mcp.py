@@ -25,6 +25,7 @@ Requires the optional extra: ``uv sync --extra mcp``.
 from __future__ import annotations
 
 import argparse
+import base64
 import io
 import os
 import secrets
@@ -34,11 +35,13 @@ from typing import Any
 
 try:  # optional dependency (see pyproject `[project.optional-dependencies] mcp`)
     from fastmcp import FastMCP
+    from fastmcp.tools import ToolResult
     from fastmcp.utilities.mime import UI_MIME_TYPE
     from fastmcp.utilities.types import Image as McpImage
     from mcp.types import TextContent
 except ImportError:  # pragma: no cover - only hit without the extra
     FastMCP = None  # type: ignore[assignment]
+    ToolResult = None  # type: ignore[assignment]
     UI_MIME_TYPE = None  # type: ignore[assignment]
     McpImage = None  # type: ignore[assignment]
     TextContent = None  # type: ignore[assignment]
@@ -107,21 +110,37 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
     const download = document.getElementById("download");
     const empty = document.getElementById("empty");
 
-    // The host forwards the tool result; render the image it contains.
-    app.ontoolresult = ({ content }) => {
-      const blocks = content || [];
-      const image = blocks.find((b) => b.type === "image");
-      const text = blocks.filter((b) => b.type === "text").map((b) => b.text).join("\n");
+    // The host forwards the tool result. Prefer structuredContent (hosts
+    // reliably pass it to the view); fall back to the image content block.
+    function show(src, text) {
       if (text) caption.textContent = text;
-      if (!image) { empty.textContent = "Kein Bild im Tool-Ergebnis."; return; }
-      const allowed = ["image/png", "image/jpeg", "image/gif"];
-      const mime = allowed.includes(image.mimeType) ? image.mimeType : "image/png";
-      const src = `data:${mime};base64,${image.data}`;
+      if (!src) {
+        empty.textContent = "Kein Bild im Tool-Ergebnis.";
+        empty.hidden = false;
+        return;
+      }
       img.src = src;
       img.hidden = false;
       download.href = src;
       download.hidden = false;
       empty.hidden = true;
+    }
+
+    app.ontoolresult = (params) => {
+      const blocks = params.content || [];
+      const structured = params.structuredContent || params.structured_content || {};
+      let src = typeof structured.image === "string" ? structured.image : null;
+      if (!src) {
+        const image = blocks.find((b) => b.type === "image");
+        if (image && image.data) {
+          const allowed = ["image/png", "image/jpeg", "image/gif"];
+          const mime = allowed.includes(image.mimeType) ? image.mimeType : "image/png";
+          src = `data:${mime};base64,${image.data}`;
+        }
+      }
+      const text = structured.words
+        || blocks.filter((b) => b.type === "text").map((b) => b.text).join("\n");
+      show(src, text);
     };
 
     function applyHostContext(ctx) {
@@ -134,8 +153,13 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
     }
     app.onhostcontextchanged = applyHostContext;
 
-    await app.connect();
-    applyHostContext(app.getHostContext());
+    try {
+      await app.connect();
+      applyHostContext(app.getHostContext());
+    } catch (error) {
+      empty.textContent = "Verbindung zum Host fehlgeschlagen: " + error;
+      empty.hidden = false;
+    }
   </script>
 </body>
 </html>
@@ -155,14 +179,18 @@ def _image_from_bytes(data: bytes) -> Any:
     return McpImage(data=data, format="png")
 
 
+def _png_bytes(image: Any) -> bytes:
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
 def _image_from_path(path: Path) -> Any:
     return _image_from_bytes(path.read_bytes())
 
 
 def _image_from_pil(image: Any) -> Any:
-    buffer = io.BytesIO()
-    image.save(buffer, format="PNG")
-    return _image_from_bytes(buffer.getvalue())
+    return _image_from_bytes(_png_bytes(image))
 
 
 def default_output_dir() -> Path:
@@ -245,11 +273,23 @@ def render_word_sheet(
     )
     image = render_sheet(entries, options, icons_dir=catalog.icons_dir)
     rendered_words = ", ".join(catalog.label_of(catalog.resolve(word)) for word in words)
+    png = _png_bytes(image)
     lines = [f"Gerendertes Piktogrammblatt: {rendered_words}"]
     saved = _save_png(image, output_dir)
     if saved is not None:
         lines.append(f"Datei: {saved}")
-    return [_text("\n".join(lines)), _image_from_pil(image)]
+    # structuredContent is what MCP Apps hosts pass to the viewer; `content` is
+    # for the model. Return both so the picture is shown either way.
+    return ToolResult(
+        content=[_text("\n".join(lines)), _image_from_bytes(png)],
+        structured_content={
+            "words": rendered_words,
+            "sentence": sentence,
+            "meaning": meaning,
+            "image": "data:image/png;base64," + base64.b64encode(png).decode(),
+            "mime_type": "image/png",
+        },
+    )
 
 
 def render_tree(
@@ -275,11 +315,20 @@ def render_tree(
         **({"icon_size": icon_size} if icon_size else {}),
     )
     image = render_layout(spec, options, icons_dir=catalog.icons_dir)
+    png = _png_bytes(image)
     lines = ["Gerendertes Piktogramm-Layout"]
     saved = _save_png(image, output_dir)
     if saved is not None:
         lines.append(f"Datei: {saved}")
-    return [_text("\n".join(lines)), _image_from_pil(image)]
+    return ToolResult(
+        content=[_text("\n".join(lines)), _image_from_bytes(png)],
+        structured_content={
+            "sentence": sentence,
+            "meaning": meaning,
+            "image": "data:image/png;base64," + base64.b64encode(png).decode(),
+            "mime_type": "image/png",
+        },
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -339,7 +388,7 @@ def create_server(
         labels: bool = True,
         columns: int | None = None,
         icon_size: int | None = None,
-    ) -> list[Any]:
+    ) -> "ToolResult":
         """Render an ordered list of pictogram WORDS to a single strip image.
 
         Pass the words in reading order (left→right = first … then). `roles` is
@@ -360,7 +409,7 @@ def create_server(
         page_size: str | None = None,
         labels: bool = True,
         icon_size: int | None = None,
-    ) -> list[Any]:
+    ) -> "ToolResult":
         """Render a free arrangement of pictogram WORDS as an image.
 
         For timetables/tables (`grid` with `columns` and `rows`), cards with
