@@ -129,18 +129,19 @@ async def exercise() -> None:
         )
         sheet_tool = next(t for t in tool_list if t.name == "render_pictogram_sheet")
         ui_meta = (sheet_tool.meta or {}).get("ui", {})
+        declared_uri = ui_meta.get("resourceUri", "")
         check(
-            ui_meta.get("resourceUri") == "ui://arasaac/viewer.html",
-            "render tool declares the MCP Apps viewer (ui.resourceUri)",
+            declared_uri.startswith("ui://arasaac/viewer.") and declared_uri.endswith(".html"),
+            f"render tool declares a versioned MCP Apps viewer URI ({declared_uri})",
         )
         prompts = {prompt.name for prompt in await client.list_prompts()}
         check("pictogram_transcriber" in prompts, "prompt registered")
         resources = {str(resource.uri) for resource in await client.list_resources()}
         check(
-            {"arasaac://skill", "arasaac://rules", "ui://arasaac/viewer.html"} <= resources,
+            {"arasaac://skill", "arasaac://rules"} <= resources and declared_uri in resources,
             "resources registered",
         )
-        viewer = await client.read_resource("ui://arasaac/viewer.html")
+        viewer = await client.read_resource(declared_uri)
         viewer_html = viewer[0].text
         check(
             "@modelcontextprotocol/ext-apps" in viewer_html and "ontoolresult" in viewer_html,

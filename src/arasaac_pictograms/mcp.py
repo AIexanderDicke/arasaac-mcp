@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import io
 import os
 import secrets
@@ -73,15 +74,25 @@ SHEET_VIEW_URI = "ui://arasaac/viewer.html"
 _EXT_APPS_CDN = "https://unpkg.com"
 _EXT_APPS_URL = f"{_EXT_APPS_CDN}/@modelcontextprotocol/ext-apps@1.0.1/app-with-deps"
 
+# Hosts cache `ui://` resources by URI, so a changed viewer would keep being
+# served from their cache.  Deriving the URI from a hash of the HTML means any
+# edit yields a fresh URI that cannot be stale.  The constant name above is
+# kept as the human-readable prefix.
+def _versioned_view_uri(html: str) -> str:
+    digest = hashlib.sha256(html.encode("utf-8")).hexdigest()[:12]
+    return f"ui://arasaac/viewer.{digest}.html"
+
+
 # Metadata attached to both render tools: point the host at the viewer and
 # allow it to load the bridge script.  Standard MCP Apps metadata only.
-_TOOL_UI_META: dict[str, Any] = {
-    "ui": {
-        "resourceUri": SHEET_VIEW_URI,
-        "csp": {"resourceDomains": [_EXT_APPS_CDN], "connectDomains": [_EXT_APPS_CDN]},
-    },
-    "ui/resourceUri": SHEET_VIEW_URI,
-}
+def _tool_ui_meta(view_uri: str) -> dict[str, Any]:
+    return {
+        "ui": {
+            "resourceUri": view_uri,
+            "csp": {"resourceDomains": [_EXT_APPS_CDN], "connectDomains": [_EXT_APPS_CDN]},
+        },
+        "ui/resourceUri": view_uri,
+    }
 
 # Host-agnostic viewer.  Primary path is the standard MCP Apps bridge
 # (ext-apps); if the host instead exposes the OpenAI Apps SDK compatibility
@@ -492,6 +503,8 @@ def create_server(
     catalog = get_catalog(icons_dir)
     debug_dir = (default_output_dir() if output_dir is None else Path(output_dir)) if save else None
     server = FastMCP(name="arasaac-pictograms", instructions=INSTRUCTIONS)
+    view_uri = _versioned_view_uri(SHEET_VIEW_HTML)
+    tool_ui_meta = _tool_ui_meta(view_uri)
 
     @server.tool
     def search_pictograms(query: str, limit: int = 25) -> str:
@@ -512,7 +525,7 @@ def create_server(
         """
         return view(catalog, word)
 
-    @server.tool(meta=_TOOL_UI_META)
+    @server.tool(meta=tool_ui_meta)
     def render_pictogram_sheet(
         words: list[str],
         roles: list[str] | None = None,
@@ -532,7 +545,7 @@ def create_server(
             catalog, words, roles, sentence, meaning, labels, columns, icon_size, debug_dir
         )
 
-    @server.tool(meta=_TOOL_UI_META)
+    @server.tool(meta=tool_ui_meta)
     def render_pictogram_layout(
         layout: dict[str, Any],
         sentence: str | None = None,
@@ -565,7 +578,7 @@ def create_server(
         )
 
     @server.resource(
-        SHEET_VIEW_URI,
+        view_uri,
         name="arasaac sheet viewer",
         description="MCP Apps viewer that renders the generated pictogram sheet.",
         mime_type=UI_MIME_TYPE,
