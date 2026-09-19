@@ -115,9 +115,16 @@ async def exercise() -> None:
             "resources registered",
         )
         viewer = await client.read_resource("ui://arasaac/viewer.html")
+        viewer_html = viewer[0].text
         check(
-            "@modelcontextprotocol/ext-apps" in viewer[0].text and "ontoolresult" in viewer[0].text,
+            "@modelcontextprotocol/ext-apps" in viewer_html and "ontoolresult" in viewer_html,
             "MCP Apps viewer HTML is served",
+        )
+        # Hosts inject this HTML via a JS template literal (document.write), so a
+        # backtick or `${` here would break the host's parser. See AGENTS.md.
+        check(
+            "`" not in viewer_html and "${" not in viewer_html,
+            "viewer HTML has no backticks or template placeholders",
         )
 
         result = await client.call_tool("search_pictograms", {"query": "Regen", "limit": 3})

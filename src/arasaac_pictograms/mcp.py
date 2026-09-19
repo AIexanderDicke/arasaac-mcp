@@ -113,12 +113,12 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
     <img id="sheet" alt="Piktogrammfolge" hidden>
     <div id="caption" class="caption"></div>
     <a id="download" class="download" download="piktogramme.png" hidden>Bild herunterladen</a>
-    <div id="status" class="status">viewer v2 · Skript lädt …</div>
+    <div id="status" class="status">viewer v3 · Skript lädt …</div>
   </div>
   <script>
     window.__arasaacStatus = function (message) {
       var el = document.getElementById("status");
-      if (el) el.textContent = "viewer v2 · " + message;
+      if (el) el.textContent = "viewer v3 · " + message;
     };
     window.addEventListener("error", function (e) {
       window.__arasaacStatus("Fehler: " + (e.message || e.error));
@@ -153,7 +153,7 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
         if (image && image.data) {
           const allowed = ["image/png", "image/jpeg", "image/gif"];
           const mime = allowed.includes(image.mimeType) ? image.mimeType : "image/png";
-          src = `data:${mime};base64,${image.data}`;
+          src = "data:" + mime + ";base64," + image.data;
         }
       }
       const text = structured.words
@@ -172,10 +172,10 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
         app.onhostcontextchanged = (ctx) => {
           const insets = ctx && ctx.safeAreaInsets;
           if (!insets) return;
-          document.body.style.paddingTop = `${insets.top}px`;
-          document.body.style.paddingRight = `${insets.right}px`;
-          document.body.style.paddingBottom = `${insets.bottom}px`;
-          document.body.style.paddingLeft = `${insets.left}px`;
+          document.body.style.paddingTop = insets.top + "px";
+          document.body.style.paddingRight = insets.right + "px";
+          document.body.style.paddingBottom = insets.bottom + "px";
+          document.body.style.paddingLeft = insets.left + "px";
         };
         await app.connect();
         status("ext-apps verbunden, warte auf Ergebnis …");
