@@ -113,12 +113,12 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
     <img id="sheet" alt="Piktogrammfolge" hidden>
     <div id="caption" class="caption"></div>
     <a id="download" class="download" download="piktogramme.png" hidden>Bild herunterladen</a>
-    <div id="status" class="status">viewer v4 · Skript lädt …</div>
+    <div id="status" class="status">viewer v5 · Skript lädt …</div>
   </div>
   <script>
     window.__arasaacStatus = function (message) {
       var el = document.getElementById("status");
-      if (el) el.textContent = "viewer v4 · " + message;
+      if (el) el.textContent = "viewer v5 · " + message;
     };
     window.addEventListener("error", function (e) {
       window.__arasaacStatus("Fehler: " + (e.message || e.error));
@@ -133,9 +133,9 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
     const caption = document.getElementById("caption");
     const download = document.getElementById("download");
 
-    function show(src, text) {
+    function show(src, text, note) {
       if (text) caption.textContent = text;
-      if (!src) { status("Ergebnis ohne Bild empfangen"); return; }
+      if (!src) { status("kein Bild gefunden · " + (note || "")); return; }
       img.src = src;
       img.hidden = false;
       download.href = src;
@@ -143,22 +143,42 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
       status("Bild angezeigt");
     }
 
-    // Accept the MCP Apps shape (structuredContent + content), and be lenient.
-    function fromResult(structured, blocks) {
-      structured = structured || {};
-      blocks = blocks || [];
-      let src = typeof structured.image === "string" ? structured.image : null;
-      if (!src) {
-        const image = blocks.find((b) => b.type === "image");
-        if (image && image.data) {
-          const allowed = ["image/png", "image/jpeg", "image/gif"];
-          const mime = allowed.includes(image.mimeType) ? image.mimeType : "image/png";
-          src = "data:" + mime + ";base64," + image.data;
+    // Recursively search any JSON value for something that looks like an image:
+    // a data: URI, or a base64 payload paired with a mime type.
+    function findImage(node, seen) {
+      if (!node || typeof node !== "object") return null;
+      if (seen.indexOf(node) !== -1) return null;
+      seen.push(node);
+      if (Array.isArray(node)) {
+        for (let i = 0; i < node.length; i++) {
+          const hit = findImage(node[i], seen);
+          if (hit) return hit;
         }
+        return null;
       }
-      const text = structured.words
-        || blocks.filter((b) => b.type === "text").map((b) => b.text).join(String.fromCharCode(10));
-      show(src, text);
+      if (typeof node.image === "string" && node.image.indexOf("data:") === 0) return node.image;
+      if (typeof node.data === "string" && node.data.length > 512
+          && (node.type === "image" || node.mimeType || node.mime_type)) {
+        const mime = node.mimeType || node.mime_type || "image/png";
+        return "data:" + mime + ";base64," + node.data;
+      }
+      for (const key in node) {
+        const hit = findImage(node[key], seen);
+        if (hit) return hit;
+      }
+      return null;
+    }
+
+    function findText(node) {
+      if (node && typeof node.words === "string") return node.words;
+      const blocks = (node && node.content) || [];
+      return blocks.filter((b) => b && b.type === "text").map((b) => b.text)
+        .join(String.fromCharCode(10));
+    }
+
+    function fromResult(payload) {
+      const src = findImage(payload, []);
+      show(src, findText(payload), src ? "" : Object.keys(payload || {}).join(","));
     }
 
     // 1) Standard, host-agnostic MCP Apps bridge.
@@ -167,8 +187,7 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
       try {
         const { App } = await import("__EXT_APPS_URL__");
         const app = new App({ name: "ARASAAC Sheet Viewer", version: "2.0.0" });
-        app.ontoolresult = (params) =>
-          fromResult(params.structuredContent || params.structured_content, params.content);
+        app.ontoolresult = (params) => fromResult(params);
         app.onhostcontextchanged = (ctx) => {
           const insets = ctx && ctx.safeAreaInsets;
           if (!insets) return;
@@ -191,7 +210,7 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
       const output = openai.toolOutput;
       if (output && (output.image || output.words)) {
         status("window.openai Ergebnis");
-        fromResult(output, []);
+        fromResult(output);
       } else {
         status("window.openai erkannt (noch kein Ergebnis)");
       }
