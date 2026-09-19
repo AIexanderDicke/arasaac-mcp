@@ -216,7 +216,6 @@ def _render_result(
         structured["words"] = words
     if saved is not None:
         url = f"{public_base_url()}/sheet/{saved.name}"
-        lines.append(f"Bild: {url}")
         structured["image_url"] = url
         return ToolResult(
             content=[_text("\n".join(lines))],
@@ -320,6 +319,10 @@ def create_server(
         Pass the words in reading order (left→right = first … then). `roles` is
         optional and parallel to `words`: PERSON, NOUN, VERB, QUALITY, SOCIAL,
         MISC (Fitzgerald colour frames). Call it once for the primary sequence.
+
+        Der Host zeigt das gerenderte Bild selbst als Web-Vorschau an (über
+        image_url). Gib die Bild-URL NICHT in deiner Antwort aus und bette sie
+        nicht als Markdown-Bild ein.
         """
         return render_word_sheet(
             catalog, words, roles, sentence, meaning, labels, columns, icon_size, debug_dir
@@ -341,6 +344,10 @@ def create_server(
         `word` (e.g. {"type": "icon", "word": "Mathe", "role": "NOUN"}); a bare
         string is an icon shorthand and a list becomes a column. Node types:
         icon, text, row, column, card, grid, arrow, spacer, divider, canvas.
+
+        Der Host zeigt das gerenderte Bild selbst als Web-Vorschau an (über
+        image_url). Gib die Bild-URL NICHT in deiner Antwort aus und bette sie
+        nicht als Markdown-Bild ein.
         """
         return render_tree(
             catalog, layout, sentence, meaning, page_size, labels, icon_size, debug_dir
