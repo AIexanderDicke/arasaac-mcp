@@ -53,7 +53,7 @@ core.
 | `skills/arasaac-pictograms/` | **generated** Agent Skill (SKILL.md + `references/`); do not edit by hand |
 | `Dockerfile`, `docker-compose.yml`, `.dockerignore` | Self-contained image (code + fonts + 338 MB icons), no API key |
 | `examples/mcp.json` | MCP host config template (stdio) |
-| `download_icons.py` | Downloads the pictograms + `metadata_de.json` (stdlib only) |
+| `scripts/download_icons.py` | Downloads the pictograms + `metadata_de.json` (stdlib only) |
 | `assets/fonts/NotoSans-*.ttf` | Umlaut-capable fonts for captions |
 | `icons/` | **gitignored**, ~338 MB, 13,828 × `[id]_[description].png` + `metadata_de.json` |
 | `output/` | **gitignored**, generated sheets |
@@ -76,7 +76,7 @@ uv sync --extra mcp              # + the MCP server (fastmcp)
   no deps needed):
 
 ```bash
-uv run python download_icons.py --lang de --size 500   # writes icons/ + metadata_de.json
+uv run python scripts/download_icons.py --lang de --size 500   # writes icons/ + metadata_de.json
 ```
 
 - There are **no system fonts** in the container and Pillow's bundled default
