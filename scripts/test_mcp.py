@@ -84,6 +84,32 @@ check(
 print("\n== mcp server ==")
 
 
+async def check_viewer_javascript(html: str) -> None:
+    """Parse the viewer's <script> blocks with node, if node is available."""
+    import re
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if node is None:
+        ok("viewer JavaScript not parsed (node not found)")
+        return
+    scripts = re.findall(r"<script(?: type=\"module\")?>(.*?)</script>", html, re.S)
+    if not scripts:
+        fail("viewer HTML contains no script blocks")
+        return
+    source = "\n".join(scripts)
+    with tempfile.NamedTemporaryFile("w", suffix=".mjs", delete=False) as handle:
+        handle.write(source)
+        path = handle.name
+    result = subprocess.run([node, "--check", path], capture_output=True, text=True)
+    Path(path).unlink(missing_ok=True)
+    if result.returncode == 0:
+        ok(f"viewer JavaScript parses ({len(scripts)} script blocks)")
+    else:
+        fail(f"viewer JavaScript is invalid: {result.stderr.strip().splitlines()[:3]}")
+
+
 async def exercise() -> None:
     from fastmcp import Client
 
@@ -120,12 +146,14 @@ async def exercise() -> None:
             "@modelcontextprotocol/ext-apps" in viewer_html and "ontoolresult" in viewer_html,
             "MCP Apps viewer HTML is served",
         )
-        # Hosts inject this HTML via a JS template literal (document.write), so a
-        # backtick or `${` here would break the host's parser. See AGENTS.md.
+        # Hosts embed this HTML in a JS string (document.write), so the emitted
+        # script must itself be valid JS: no backticks / `${`, and no raw
+        # newlines inside string literals. See AGENTS.md.
         check(
             "`" not in viewer_html and "${" not in viewer_html,
             "viewer HTML has no backticks or template placeholders",
         )
+        await check_viewer_javascript(viewer_html)
 
         result = await client.call_tool("search_pictograms", {"query": "Regen", "limit": 3})
         check("Regen" in result.content[0].text, "search tool answers by word")

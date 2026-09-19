@@ -175,6 +175,12 @@ python scripts/run_transcriber.py --mode json "…" > trace.jsonl   # full tool 
   always forward `content` image blocks; the viewer prefers it and falls back.
 - The CSP `resourceDomains` must list every origin the widget loads; bump the
   pinned `_EXT_APPS_URL` when the ext-apps SDK changes.
+- **The viewer's JS must be valid standalone JS.** Hosts embed the resource HTML
+  in a JS string (`document.write`), so `SHEET_VIEW_HTML` must contain no
+  backticks or `${`, and **no raw newlines inside JS string literals** — in a
+  Python triple-quoted string `"\n"` becomes a real newline and breaks the
+  script (`Invalid or unexpected token`). Use `String.fromCharCode(10)` instead.
+  `scripts/test_mcp.py` parses the emitted script with `node --check`.
 
 ### The pi agent is locked down
 - `scripts/run_transcriber.py` runs pi with:

@@ -113,12 +113,12 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
     <img id="sheet" alt="Piktogrammfolge" hidden>
     <div id="caption" class="caption"></div>
     <a id="download" class="download" download="piktogramme.png" hidden>Bild herunterladen</a>
-    <div id="status" class="status">viewer v3 · Skript lädt …</div>
+    <div id="status" class="status">viewer v4 · Skript lädt …</div>
   </div>
   <script>
     window.__arasaacStatus = function (message) {
       var el = document.getElementById("status");
-      if (el) el.textContent = "viewer v3 · " + message;
+      if (el) el.textContent = "viewer v4 · " + message;
     };
     window.addEventListener("error", function (e) {
       window.__arasaacStatus("Fehler: " + (e.message || e.error));
@@ -157,7 +157,7 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
         }
       }
       const text = structured.words
-        || blocks.filter((b) => b.type === "text").map((b) => b.text).join("\n");
+        || blocks.filter((b) => b.type === "text").map((b) => b.text).join(String.fromCharCode(10));
       show(src, text);
     }
 
