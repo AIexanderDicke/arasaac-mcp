@@ -1,0 +1,26 @@
+{
+  "title": "Zähne putzen – eine gute Tat",
+  "meaning": "Beispiel für eine Karten-Grafik mit Pfeil und gestricheltem Rahmen.",
+  "layout": {
+    "type": "row", "gap": 50, "align": "center",
+    "children": [
+      {"type": "card", "border": "#2E75B6", "border_width": 4, "padding": 24, "gap": 12, "children": [
+        {"type": "icon", "file": "27489_Zähne_putzen.png", "size": 200},
+        {"type": "text", "text": "ZÄHNE PUTZEN", "bold": true, "size": 26},
+        {"type": "card", "dashed": true, "border": "#8CC63F", "border_width": 4, "padding": 10, "children": [
+          {"type": "icon", "file": "10197_gut.png", "size": 200, "frame": false}
+        ]},
+        {"type": "text", "text": "GUT", "bold": true, "size": 26}
+      ]},
+      {"type": "arrow", "direction": "right", "length": 180, "thickness": 34, "color": "#F2B705"},
+      {"type": "card", "border": "#2E75B6", "border_width": 4, "padding": 24, "gap": 12, "children": [
+        {"type": "icon", "file": "11728_Familie.png", "size": 200},
+        {"type": "text", "text": "ELTERN", "bold": true, "size": 26},
+        {"type": "card", "dashed": true, "border": "#8CC63F", "border_width": 4, "padding": 10, "children": [
+          {"type": "icon", "file": "39814_glücklich.png", "size": 200, "frame": false}
+        ]},
+        {"type": "text", "text": "FREUDE", "bold": true, "size": 26}
+      ]}
+    ]
+  }
+}

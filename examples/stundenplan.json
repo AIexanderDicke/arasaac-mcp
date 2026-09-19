@@ -1,0 +1,18 @@
+{
+  "title": "Mein Stundenplan",
+  "meaning": "Fächer pro Tag und Stunde.",
+  "layout": {
+    "type": "grid",
+    "border": "#444444",
+    "border_width": 2,
+    "header_background": "#F2C200",
+    "cell_padding": 10,
+    "gap": 6,
+    "columns": ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"],
+    "rows": [
+      {"header": "1.", "cells": ["36373_Mathe.png", "37740_Deutschunterricht.png", "32705_Englisch.png", "10258_Sport.png", "11245_Kunstunterricht.png"]},
+      {"header": "2.", "cells": ["32705_Englisch.png", "36373_Mathe.png", "36373_Mathe.png", "24471_Religion.png", "36373_Mathe.png"]},
+      {"header": "Pause", "cells": ["24503_Pause.png", "24503_Pause.png", "24503_Pause.png", "24503_Pause.png", "24503_Pause.png"]}
+    ]
+  }
+}

@@ -12,10 +12,17 @@ from .layout import (
     entries_from_json,
     load_json,
     render_and_save,
+    render_layout_and_save,
     resolve_icon,
 )
 
 DEFAULT_ICONS_DIR = Path("icons")
+
+
+def _looks_like_layout(data: object) -> bool:
+    return isinstance(data, dict) and (
+        "layout" in data or ("type" in data and "sequence" not in data)
+    )
 
 
 def _split_files(values: list[str]) -> list[str]:
@@ -80,6 +87,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--padding", type=int, default=16, help="padding inside a card.")
     parser.add_argument("--scale", type=int, default=2, help="supersampling factor.")
     parser.add_argument("--dpi", type=int, default=96, help="logical resolution.")
+    parser.add_argument(
+        "--page-size",
+        default=None,
+        metavar="SIZE",
+        help="fixed page size for layouts: a4, a4-landscape, letter, or WxH in px.",
+    )
     return parser
 
 
@@ -89,24 +102,32 @@ def main(argv: list[str] | None = None) -> int:
     entries: list[Entry] = []
     sentence = args.sentence
     meaning = args.meaning
+    layout_spec: dict | None = None
 
     if args.json:
         data = load_json(args.json)
-        alternative: int | str | None = None
-        if args.alternative is not None:
-            alternative = int(args.alternative) if args.alternative.isdigit() else args.alternative
-        entries, meta = entries_from_json(data, args.icons_dir, alternative)
-        sentence = sentence or meta.get("sentence")
-        meaning = meaning or meta.get("meaning")
+        if _looks_like_layout(data):
+            layout_spec = data
+            sentence = sentence or data.get("sentence") or data.get("title")
+            meaning = meaning or data.get("meaning")
+        else:
+            alternative: int | str | None = None
+            if args.alternative is not None:
+                alternative = int(args.alternative) if args.alternative.isdigit() else args.alternative
+            entries, meta = entries_from_json(data, args.icons_dir, alternative)
+            sentence = sentence or meta.get("sentence")
+            meaning = meaning or meta.get("meaning")
 
     names = _split_files(args.icons)
     if "-" in names:
         names.remove("-")
         names.extend(_split_files([sys.stdin.read()]))
+    if names and layout_spec is not None:
+        build_parser().error("pass either a layout JSON or pictogram filenames, not both")
     if names:
         entries.extend(Entry(resolve_icon(name, args.icons_dir)) for name in names)
 
-    if not entries:
+    if not entries and layout_spec is None:
         build_parser().error("no pictograms given (pass filenames, --json, or '-' for stdin)")
 
     outputs = args.output or [Path("pictogram_strip.png")]
@@ -124,7 +145,14 @@ def main(argv: list[str] | None = None) -> int:
         attribution=not args.no_attribution,
         scale=args.scale,
         dpi=args.dpi,
+        page_size=args.page_size,
     )
+
+    if layout_spec is not None:
+        written = render_layout_and_save(layout_spec, outputs, options, icons_dir=args.icons_dir)
+        for path in written:
+            print(path)
+        return 0
 
     written = render_and_save(entries, outputs, options, icons_dir=args.icons_dir)
     for path in written:

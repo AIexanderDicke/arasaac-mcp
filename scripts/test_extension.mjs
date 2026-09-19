@@ -144,4 +144,66 @@ else ok(`returned image (${Math.round(renderedImage.data.length / 1024)} KiB bas
 if (!outputPath || !fs.existsSync(outputPath)) fail("render output file missing");
 else ok(`wrote ${path.relative(ROOT, outputPath)} (${fs.statSync(outputPath).size} bytes)`);
 
+// ---------------------------------------------------------------------------
+console.log("\n== render_pictogram_layout ==");
+const layoutTool = tools.get("render_pictogram_layout");
+if (!layoutTool) fail("render_pictogram_layout not registered");
+
+// A timetable: grid with column and row headers, icon words in the cells.
+const timetable = await layoutTool.execute(
+	"t7",
+	{
+		layout: {
+			type: "grid",
+			header_background: "#F2C200",
+			border: "#444444",
+			columns: ["Montag", "Dienstag"],
+			rows: [
+				{ header: "1.", cells: ["Mathe", "Sport"] },
+				{ header: "2.", cells: ["Pause", "Regen"] },
+			],
+		},
+		sentence: "Mein Stundenplan",
+	},
+	undefined,
+	undefined,
+	ctx,
+);
+const timetableImage = timetable.content.find((part) => part.type === "image");
+if (!timetableImage) fail("render_pictogram_layout (grid) returned no image");
+else ok(`grid layout returned image (${Math.round(timetableImage.data.length / 1024)} KiB base64)`);
+if (!timetable.details?.path || !fs.existsSync(timetable.details.path)) fail("grid layout output file missing");
+else ok(`wrote ${path.relative(ROOT, timetable.details.path)}`);
+
+// Cards + connector + a bare-string icon shorthand.
+const cards = await layoutTool.execute(
+	"t8",
+	{
+		layout: {
+			type: "row",
+			gap: 30,
+			align: "center",
+			children: [
+				{ type: "card", children: ["Zähne putzen", { type: "text", text: "GUT", bold: true }] },
+				{ type: "arrow", direction: "right", length: 120 },
+				{ type: "card", children: ["Familie", { type: "text", text: "FREUDE", bold: true }] },
+			],
+		},
+	},
+	undefined,
+	undefined,
+	ctx,
+);
+if (!cards.content.find((part) => part.type === "image")) fail("render_pictogram_layout (cards) returned no image");
+else ok("card/arrow layout returned image");
+
+let badRoleThrew = false;
+try {
+	await layoutTool.execute("t9", { layout: { type: "icon", word: "Auto", role: "NOPE" } }, undefined, undefined, ctx);
+} catch {
+	badRoleThrew = true;
+}
+if (!badRoleThrew) fail("render_pictogram_layout should reject an invalid role");
+else ok("invalid role throws");
+
 console.log(process.exitCode ? "\nSOME CHECKS FAILED" : "\nALL CHECKS PASSED");

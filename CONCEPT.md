@@ -146,6 +146,7 @@ Satz
 - `download_icons.py` — lädt alle ARASAAC-Piktogramme für eine Sprache.
 - `icons/` — ~13.800 Piktogramme (`[id]_[beschreibung].png`).
 - `prompt.md` — Prompt/Regelwerk für das Modell.
+- `examples/` — Beispiel-Layouts (Stundenplan, Karten mit Pfeil).
 - `CONCEPT.md` — dieses Dokument.
 
 ---
@@ -163,7 +164,7 @@ projektspezifische Tools hat, statt dem Modell freien Shell-Zugriff zu geben.
     Kandidaten wirklich ansieht (prompt.md-Regel „verify visually“).
   - `render_pictogram_sheet` — rendert die gewählte Folge als Bild/PDF
     (der in `layout.py` gebaute Renderer).
-- **MCP-Server + Skill.** Dieselben drei Tools werden später als MCP-Server
+- **MCP-Server + Skill.** Dieselben Tools werden später als MCP-Server
   bereitgestellt; ein Skill bündelt den Workflow/die Regeln aus `prompt.md`.
   So kann der Transcriber in verschiedenen Harnesses (pi, Claude, …) laufen.
   Der Skill entspricht der heutigen Agent-Definition.
@@ -171,14 +172,19 @@ projektspezifische Tools hat, statt dem Modell freien Shell-Zugriff zu geben.
   irreführend (Beispiele in §3). Perspektivisch eigene, geprüfte Beschreibungen
   und Synonym-/Wortstamm-Listen (Schüler/Schülerin, Singular/Plural) sowie
   Embeddings statt reiner Textsuche.
-- **Allgemeineres Layout.** Nicht nur Satz-Strips: Raster, Zeitpläne
-  (z. B. Stundenplan), freie Anordnung, mehrere Seiten/Alternativen, Presets.
+- **Allgemeineres Layout.** Nicht nur Satz-Strips: ein **Layout-Baum** aus
+  `icon`, `text`, `row`/`column`, `card`, `grid` (Tabelle/Stundenplan),
+  `arrow`, `spacer`, `canvas` (freie Positionen). Umgesetzt in
+  `layout.py` (`render_layout`) und über das Tool `render_pictogram_layout`
+  nutzbar; Vorlagen in `examples/` (Stundenplan, Karten mit Pfeil im Stil von
+  ARASAAC-Material 2614). Noch offen: mehrere Seiten pro Dokument, Presets und
+  automatische Umbrüche langer Tabellen.
 - **Evaluation.** Kleine Satzsammlung, mit der der Agent wiederholt getestet
   wird; Bewertung durch Fachpersonen (Verständlichkeit, nicht Worttreue).
 
 Referenz-Implementierung für den ersten Agenten:
 
-- `.pi/extensions/pictograms.ts` — registriert die drei Tools.
+- `.pi/extensions/pictograms.ts` — registriert die vier Tools.
 - `.pi/agents/pictogram-transcriber.md` — Systemprompt (aus `prompt.md`) plus
   `tools:`-Allowlist; so hat der Agent **nur** diese Tools.
 - `scripts/run_transcriber.py` — Test-Harness, der den Agenten headless startet.

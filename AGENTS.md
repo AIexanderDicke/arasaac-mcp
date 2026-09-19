@@ -21,8 +21,9 @@ especially children in special education — can understand it.
 pi agent (.pi/agents/pictogram-transcriber.md)
   │  system prompt (kept in sync with prompt.md) + tools allowlist
   ▼
-pi extension (.pi/extensions/pictograms.ts)  → 3 word-based tools
-  │  render_pictogram_sheet
+pi extension (.pi/extensions/pictograms.ts)  → 4 word-based tools
+  │  render_pictogram_sheet (straight strip)
+  │  render_pictogram_layout (grid/cards/canvas)
   ▼
 uv run make-sheet  (src/arasaac_pictograms/cli.py)
   ▼
@@ -38,9 +39,9 @@ MCP server + skill later. Keep `layout.py` free of pi/agent specifics.
 
 | Path | Role |
 | --- | --- |
-| `src/arasaac_pictograms/layout.py` | Pillow renderer: grid/strip layout, colour frames, text, PNG/JPG/PDF export |
+| `src/arasaac_pictograms/layout.py` | Pillow renderer: strip layout **and** the free layout engine (`render_layout`: grid/table, cards, canvas, arrows), colour frames, text, PNG/JPG/PDF export |
 | `src/arasaac_pictograms/cli.py` | `make-sheet` CLI (entry point) |
-| `.pi/extensions/pictograms.ts` | pi tools: `search_pictograms`, `view_pictogram`, `render_pictogram_sheet` |
+| `.pi/extensions/pictograms.ts` | pi tools: `search_pictograms`, `view_pictogram`, `render_pictogram_sheet`, `render_pictogram_layout` |
 | `.pi/agents/pictogram-transcriber.md` | Agent definition: system prompt + `tools:` allowlist + pinned model |
 | `scripts/run_transcriber.py` | Headless agent runner (only project tools) |
 | `scripts/test_extension.mjs` | Offline tool tests (jiti + mock ExtensionAPI, no LLM) |
@@ -49,6 +50,7 @@ MCP server + skill later. Keep `layout.py` free of pi/agent specifics.
 | `icons/` | **gitignored**, ~338 MB, 13,828 × `[id]_[description].png` + `metadata_de.json` |
 | `output/` | **gitignored**, generated sheets |
 | `prompt.md`, `CONCEPT.md`, `README.md` | Docs |
+| `examples/` | Sample layout JSON: `stundenplan.json` (grid), `karten.json` (cards + arrow) |
 
 ## Environment
 
@@ -70,6 +72,10 @@ uv sync                          # install deps (Pillow)
 uv run make-sheet --labels -o sheet.png -o sheet.pdf 2339_Auto.png 2909_Berg.png
 uv run make-sheet --json result.json -o sheet.png
 uv run make-sheet --help
+
+# Free layouts (timetable, cards): a JSON with a `layout` tree + optional --page-size
+uv run make-sheet --json examples/stundenplan.json --icons-dir icons \
+  --page-size a4-landscape --icon-size 150 -o plan.png
 
 # Offline tool tests (no LLM, fast):
 node scripts/test_extension.mjs
@@ -104,11 +110,18 @@ python scripts/run_transcriber.py --mode json "…" > trace.jsonl   # full tool 
   so `Auto` → the icon labelled `Auto`, not `Auto (KFZ)`.
 - `render_pictogram_sheet` takes `words` (and optional parallel `roles`), not
   files. It writes `output/sheet_<epoch>.png` via `uv run make-sheet --json`.
+- `render_pictogram_layout` takes a **layout tree** whose icon nodes use `word`
+  (a bare string is an icon shorthand, a list becomes a column). The extension
+  resolves every word to `file`/`concept` before writing the contract, so
+  `layout.py` never sees words. Python-side node types: `icon`, `text`, `row`,
+  `column`, `card`, `grid`/`table`, `arrow`, `spacer`, `divider`, `canvas`.
+  Rendering it uses the same `uv run make-sheet --json` path (the CLI detects a
+  `layout` key and calls `render_layout_and_save`).
 
 ### The pi agent is locked down
 - `scripts/run_transcriber.py` runs pi with:
   `--no-session --no-extensions --no-skills --no-context-files -e <extension>
-  --tools search_pictograms,view_pictogram,render_pictogram_sheet`.
+  --tools search_pictograms,view_pictogram,render_pictogram_sheet,render_pictogram_layout`.
   Keep it that way: the point is that the agent can call **only** project tools.
 - To add a tool: register it in `.pi/extensions/pictograms.ts` **and** add its
   name to `tools:` in the agent frontmatter.

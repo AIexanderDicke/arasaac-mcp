@@ -209,6 +209,71 @@ function resolveWord(dir: string, word: string): Pic {
 	return best;
 }
 
+/** Turn a word into a resolved icon node (word -> file + concept). */
+function iconNode(dir: string, word: string, extra: Record<string, unknown> = {}): Record<string, unknown> {
+	const pic = resolveWord(dir, word);
+	return { type: "icon", file: pic.file, concept: labelOf(dir, pic), ...extra };
+}
+
+/**
+ * Recursively resolve every word in a layout tree to `file`/`concept`.
+ * Strings are words (shorthand for an icon), arrays become columns, and grid
+ * cells are resolved as icon content. Headers stay text.
+ */
+function resolveLayoutNode(dir: string, node: unknown): Record<string, unknown> | null {
+	if (node === null || node === undefined) return null;
+	if (typeof node === "string") return iconNode(dir, node);
+	if (Array.isArray(node)) {
+		return {
+			type: "column",
+			gap: 6,
+			children: node.map((child) => resolveLayoutNode(dir, child)).filter(Boolean),
+		};
+	}
+	if (typeof node !== "object") {
+		throw new Error(`Ungültiger Layout-Knoten: ${JSON.stringify(node)}`);
+	}
+	const out = { ...(node as Record<string, unknown>) };
+	if (typeof out.word === "string") {
+		const pic = resolveWord(dir, out.word);
+		if (out.file == null) out.file = pic.file;
+		if (out.concept == null && out.text == null) out.concept = labelOf(dir, pic);
+		delete out.word;
+	}
+	if (out.role != null) {
+		const role = String(out.role).toUpperCase();
+		if (!VALID_ROLES.includes(role)) {
+			throw new Error(`Ungültige Rolle "${out.role}" (erwartet: ${VALID_ROLES.join(", ")})`);
+		}
+		out.role = role;
+	}
+	for (const key of ["children", "items"] as const) {
+		if (out[key] != null) {
+			const value = out[key];
+			const list = Array.isArray(value) ? value : [value];
+			out[key] = list.map((child) => resolveLayoutNode(dir, child)).filter(Boolean);
+		}
+	}
+	for (const key of ["child", "node"] as const) {
+		if (out[key] != null) out[key] = resolveLayoutNode(dir, out[key]);
+	}
+	if (Array.isArray(out.cells)) {
+		// Keep positions: an empty cell is `null`, not a removed entry.
+		out.cells = out.cells.map((cell) => resolveLayoutNode(dir, cell));
+	}
+	if (Array.isArray(out.rows)) {
+		out.rows = out.rows.map((row) => {
+			if (Array.isArray(row)) return { cells: row.map((cell) => resolveLayoutNode(dir, cell)) };
+			const copy = { ...(row as Record<string, unknown>) };
+			if (Array.isArray(copy.cells)) {
+				copy.cells = copy.cells.map((cell) => resolveLayoutNode(dir, cell));
+			}
+			return copy;
+		});
+	}
+	return out;
+}
+
 /** Deduplicate search hits by the label the agent will use. */
 function dedupeByWord(dir: string, hits: { pic: Pic; value: number }[]): { pic: Pic; value: number }[] {
 	const seen = new Map<string, { pic: Pic; value: number }>();
@@ -221,6 +286,43 @@ function dedupeByWord(dir: string, hits: { pic: Pic; value: number }[]): { pic: 
 }
 
 export default function (pi: ExtensionAPI) {
+	/** Write a contract, run `uv run make-sheet`, return the rendered PNG path. */
+	async function renderContract(
+		ctx: { cwd: string },
+		dir: string,
+		contract: Record<string, unknown>,
+		extraArgs: string[],
+		signal: AbortSignal | undefined,
+	): Promise<string> {
+		const tmp = path.join(
+			os.tmpdir(),
+			`arasaac-sheet-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.json`,
+		);
+		fs.writeFileSync(tmp, JSON.stringify(contract, null, 2), "utf8");
+
+		const outputDir = path.join(ctx.cwd, "output");
+		fs.mkdirSync(outputDir, { recursive: true });
+		const outputPath = path.join(
+			outputDir,
+			`sheet_${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`,
+		);
+
+		const args = ["run", "make-sheet", "--json", tmp, "-o", outputPath, "--icons-dir", dir, ...extraArgs];
+		try {
+			const result = await pi.exec("uv", args, { signal });
+			if (result.code !== 0) {
+				throw new Error(`make-sheet failed (exit ${result.code}): ${result.stderr || result.stdout}`);
+			}
+		} finally {
+			try {
+				fs.unlinkSync(tmp);
+			} catch {
+				/* ignore */
+			}
+		}
+		return outputPath;
+	}
+
 	pi.registerTool({
 		name: "search_pictograms",
 		label: "Piktogramme suchen",
@@ -361,30 +463,12 @@ export default function (pi: ExtensionAPI) {
 			});
 			const contract = { sentence: params.sentence, meaning: params.meaning, sequence };
 
-			const tmp = path.join(os.tmpdir(), `arasaac-sheet-${process.pid}-${Date.now()}.json`);
-			fs.writeFileSync(tmp, JSON.stringify(contract, null, 2), "utf8");
+			const extraArgs: string[] = [];
+			if (params.labels !== false) extraArgs.push("--labels");
+			if (params.columns) extraArgs.push("--columns", String(params.columns));
+			if (params.icon_size) extraArgs.push("--icon-size", String(params.icon_size));
 
-			const outputDir = path.join(ctx.cwd, "output");
-			fs.mkdirSync(outputDir, { recursive: true });
-			const outputPath = path.join(outputDir, `sheet_${Date.now()}.png`);
-
-			const args = ["run", "make-sheet", "--json", tmp, "-o", outputPath, "--icons-dir", dir];
-			if (params.labels !== false) args.push("--labels");
-			if (params.columns) args.push("--columns", String(params.columns));
-			if (params.icon_size) args.push("--icon-size", String(params.icon_size));
-
-			try {
-				const result = await pi.exec("uv", args, { signal });
-				if (result.code !== 0) {
-					throw new Error(`make-sheet failed (exit ${result.code}): ${result.stderr || result.stdout}`);
-				}
-			} finally {
-				try {
-					fs.unlinkSync(tmp);
-				} catch {
-					/* ignore */
-				}
-			}
+			const outputPath = await renderContract(ctx, dir, contract, extraArgs, signal);
 
 			const data = fs.readFileSync(outputPath).toString("base64");
 			const wordsLine = resolved.map((pic) => labelOf(dir, pic)).join(", ");
@@ -394,6 +478,61 @@ export default function (pi: ExtensionAPI) {
 					{ type: "image", data, mimeType: "image/png" },
 				],
 				details: { path: outputPath, words: wordsLine },
+			};
+		},
+	});
+
+	pi.registerTool({
+		name: "render_pictogram_layout",
+		label: "Piktogramm-Layout rendern",
+		description:
+			"Rendert eine freie Anordnung von Piktogramm-WÖRTERN zu einem Bild: Raster/Tabellen " +
+			"(z. B. Stundenplan mit Spalten und Zeilen), Karten, Pfeile, freie Positionen. " +
+			"Übergib einen Layout-Baum (JSON). Icon-Knoten nennen ein Wort statt einer Datei. " +
+			"Knotentypen: icon {word, role?, concept?}, text {text}, row/column {children}, " +
+			"card {children, dashed?}, grid {columns, rows} (Tabelle/Stundenplan), " +
+			"canvas {children:[{x,y,node}]}, arrow {direction}, spacer. Statt eines Objekts " +
+			"darf ein Icon-Knoten auch direkt das Wort als String sein; Listen werden zu Spalten.",
+		promptSnippet: "Eine freie Piktogramm-Anordnung (Tabelle, Karten, Raster) als Bild rendern",
+		promptGuidelines: [
+			"Nutze render_pictogram_layout, wenn die Piktogramme NICHT als einfache Zeile erscheinen sollen: für Stundenpläne/Tabellen (grid mit columns und rows), Karten mit Pfeilen oder freie Anordnungen (canvas).",
+		],
+		parameters: Type.Object({
+			layout: Type.Any({
+				description:
+					"Layout-Baum, z. B. {\"type\":\"grid\",\"columns\":[\"Montag\"],\"rows\":[{\"header\":\"1.\",\"cells\":[\"Mathe\"]}]}. " +
+					"Icon-Knoten nutzen 'word' (z. B. {\"type\":\"icon\",\"word\":\"Mathe\",\"role\":\"NOUN\"}); ein bloßer String gilt ebenfalls als Icon-Wort.",
+			}),
+			sentence: Type.Optional(Type.String({ description: "Kurze Kopfzeile in einfacher Sprache." })),
+			meaning: Type.Optional(Type.String({ description: "Einfache Erklärung darunter." })),
+			page_size: Type.Optional(
+				Type.String({ description: "Feste Seitengröße, z. B. 'a4', 'a4-landscape' oder '1200x800' (px)." }),
+			),
+			labels: Type.Optional(Type.Boolean({ description: "Icons beschriften (Standard true).", default: true })),
+			icon_size: Type.Optional(Type.Number({ description: "Icon-Boxgröße in px, wenn kein size am Knoten steht (Standard 300)." })),
+		}),
+		async execute(_id, params, signal, _onUpdate, ctx) {
+			const dir = iconsDir(ctx.cwd);
+			if (!params.layout || typeof params.layout !== "object") {
+				throw new Error("layout muss ein Layout-Objekt sein");
+			}
+			const layout = resolveLayoutNode(dir, params.layout);
+			const contract = { sentence: params.sentence, meaning: params.meaning, layout };
+
+			const extraArgs: string[] = [];
+			if (params.labels !== false) extraArgs.push("--labels");
+			if (params.icon_size) extraArgs.push("--icon-size", String(params.icon_size));
+			if (params.page_size) extraArgs.push("--page-size", params.page_size);
+
+			const outputPath = await renderContract(ctx, dir, contract, extraArgs, signal);
+
+			const data = fs.readFileSync(outputPath).toString("base64");
+			return {
+				content: [
+					{ type: "text", text: `Gerendertes Piktogramm-Layout: ${outputPath}` },
+					{ type: "image", data, mimeType: "image/png" },
+				],
+				details: { path: outputPath },
 			};
 		},
 	});
