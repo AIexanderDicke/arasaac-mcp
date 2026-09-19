@@ -83,6 +83,12 @@ free of pi/agent specifics and keep LLM logic out of the core.
 
 ```bash
 uv sync                          # install deps (Pillow)
+
+# Start/restart the MCP server without breaking the VS Code forwarded port:
+scripts/mcp_up.sh                # start relay (port 8000) + server (port 8001)
+scripts/mcp_up.sh --force        # restart only the MCP server
+# The relay keeps the forwarded port bound permanently, so the server can be
+# restarted freely; VS Code's forwarder never needs to be re-created.
 uv sync --extra mcp              # + the MCP server (fastmcp)
 
 # Render directly (filenames or the model's JSON contract):
