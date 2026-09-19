@@ -172,6 +172,28 @@ uv run --extra mcp python scripts/test_mcp.py     # offline tests, no LLM
 | resource | `arasaac://skill` | the Agent Skill (`SKILL.md`) |
 | resource | `arasaac://rules` | the full recipe (skill + references) |
 
+### Connecting a host
+
+The server speaks **stdio** (default) or **streamable HTTP** (`/mcp`). A stdio
+entry for a host config (Claude Desktop, Claude Code, …) looks like
+[`examples/mcp.json`](examples/mcp.json):
+
+```json
+{
+  "mcpServers": {
+    "arasaac-pictograms": {
+      "command": "uv",
+      "args": ["run", "--extra", "mcp", "arasaac-mcp"],
+      "cwd": "/path/to/arasaac",
+      "env": { "ARASAAC_ICONS_DIR": "/path/to/arasaac/icons" }
+    }
+  }
+}
+```
+
+For a long-running container or HTTP host, point the client at
+`http://HOST:8000/mcp` instead.
+
 ## Skill
 
 `skills/arasaac-pictograms/` is an [Agent Skill](https://agentskills.io/specification)
@@ -185,6 +207,20 @@ python scripts/build_skill.py --check   # fail if the skill is stale
 
 Harnesses that understand the Agent Skills standard discover it by description
 and load the full rules on demand.
+
+## Docker
+
+The image bundles the code, the fonts and the ~338 MB pictogram set, so it runs
+**offline** and needs **no API key** — the MCP host provides the model:
+
+```bash
+docker build -t arasaac-mcp .
+docker run --rm -p 8000:8000 arasaac-mcp            # streamable HTTP on :8000/mcp
+docker run --rm -i arasaac-mcp --transport stdio    # stdio, for a local host
+```
+
+Or `docker compose up --build`. The pictograms go into their own image layer,
+so rebuilding after a code change does not re-copy them.
 
 ## Library
 
@@ -224,6 +260,8 @@ render_layout_and_save(
 - `src/arasaac_pictograms/mcp.py` — the `arasaac-mcp` MCP server.
 - `src/arasaac_pictograms/skill.py` — locates/reads the generated Agent Skill.
 - `skills/arasaac-pictograms/` — generated Agent Skill (SKILL.md + references).
+- `Dockerfile`, `docker-compose.yml`, `.dockerignore` — self-contained image.
+- `examples/mcp.json` — MCP host config template.
 - `scripts/build_skill.py` — generate the skill from `prompt.md` (`--check`).
 - `scripts/test_mcp.py` — offline catalog + MCP tests (no LLM).
 - `examples/` — sample layout JSON (timetable, cards).

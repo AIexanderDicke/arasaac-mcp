@@ -54,6 +54,8 @@ free of pi/agent specifics and keep LLM logic out of the core.
 | `scripts/build_skill.py` | Generates `skills/` from `prompt.md` (`--check` for drift) |
 | `scripts/test_mcp.py` | Offline catalog + MCP tests (in-memory client, no LLM) |
 | `skills/arasaac-pictograms/` | **generated** Agent Skill (SKILL.md + `references/`); do not edit by hand |
+| `Dockerfile`, `docker-compose.yml`, `.dockerignore` | Self-contained image (code + fonts + 338 MB icons), no API key |
+| `examples/mcp.json` | MCP host config template (stdio) |
 | `download_icons.py` | Downloads the pictograms + `metadata_de.json` (stdlib only) |
 | `assets/fonts/NotoSans-*.ttf` | Umlaut-capable fonts for captions |
 | `icons/` | **gitignored**, ~338 MB, 13,828 × `[id]_[description].png` + `metadata_de.json` |
@@ -96,6 +98,10 @@ uv run --extra mcp python scripts/test_mcp.py   # catalog + MCP server
 uv run --extra mcp arasaac-mcp                  # stdio; add --transport http for HTTP
 python scripts/build_skill.py                   # regenerate the skill from prompt.md
 python scripts/build_skill.py --check           # fail if the skill is stale
+
+# Container (self-contained, serves HTTP on :8000/mcp):
+docker build -t arasaac-mcp . && docker run --rm -p 8000:8000 arasaac-mcp
+docker run --rm -i arasaac-mcp --transport stdio   # stdio for a local host
 
 # Run the agent end-to-end (needs a funded, vision-capable model):
 python scripts/run_transcriber.py "Wenn es regnet, müssen alle Schüler drin bleiben."

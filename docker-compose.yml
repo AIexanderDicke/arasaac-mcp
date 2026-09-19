@@ -1,0 +1,9 @@
+services:
+  arasaac-mcp:
+    build: .
+    image: arasaac-mcp
+    ports:
+      - "8000:8000"
+    environment:
+      ARASAAC_ICONS_DIR: /app/icons
+    restart: unless-stopped
