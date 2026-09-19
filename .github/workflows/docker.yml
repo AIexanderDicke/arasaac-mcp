@@ -1,0 +1,41 @@
+name: Docker
+
+on:
+  push:
+    branches: [main, master, "feat/**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # icons/ is gitignored (~338 MB); the Dockerfile needs it.
+      - name: Cache pictograms
+        uses: actions/cache@v4
+        with:
+          path: icons
+          key: arasaac-icons-de-v1
+
+      - name: Download pictograms
+        run: python3 scripts/download_icons.py --lang de --size 500 --out icons
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: arasaac-mcp:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
