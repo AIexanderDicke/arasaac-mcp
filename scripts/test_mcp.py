@@ -40,6 +40,11 @@ def check(condition: bool, message: str) -> None:
     (ok if condition else fail)(message)
 
 
+def image_url_ok(url: str) -> bool:
+    """The host shows this URL as a web preview; no inline base64 any more."""
+    return url.startswith("http") and url.endswith(".png")
+
+
 # --------------------------------------------------------------------------- #
 # Catalog
 # --------------------------------------------------------------------------- #
@@ -84,32 +89,6 @@ check(
 print("\n== mcp server ==")
 
 
-async def check_viewer_javascript(html: str) -> None:
-    """Parse the viewer's <script> blocks with node, if node is available."""
-    import re
-    import shutil
-    import subprocess
-
-    node = shutil.which("node")
-    if node is None:
-        ok("viewer JavaScript not parsed (node not found)")
-        return
-    scripts = re.findall(r"<script(?: type=\"module\")?>(.*?)</script>", html, re.S)
-    if not scripts:
-        fail("viewer HTML contains no script blocks")
-        return
-    source = "\n".join(scripts)
-    with tempfile.NamedTemporaryFile("w", suffix=".mjs", delete=False) as handle:
-        handle.write(source)
-        path = handle.name
-    result = subprocess.run([node, "--check", path], capture_output=True, text=True)
-    Path(path).unlink(missing_ok=True)
-    if result.returncode == 0:
-        ok(f"viewer JavaScript parses ({len(scripts)} script blocks)")
-    else:
-        fail(f"viewer JavaScript is invalid: {result.stderr.strip().splitlines()[:3]}")
-
-
 async def exercise() -> None:
     from fastmcp import Client
 
@@ -127,34 +106,17 @@ async def exercise() -> None:
             },
             f"four tools registered ({sorted(tools)})",
         )
-        sheet_tool = next(t for t in tool_list if t.name == "render_pictogram_sheet")
-        ui_meta = (sheet_tool.meta or {}).get("ui", {})
-        declared_uri = ui_meta.get("resourceUri", "")
-        check(
-            declared_uri.startswith("ui://arasaac/viewer.") and declared_uri.endswith(".html"),
-            f"render tool declares a versioned MCP Apps viewer URI ({declared_uri})",
-        )
         prompts = {prompt.name for prompt in await client.list_prompts()}
         check("pictogram_transcriber" in prompts, "prompt registered")
         resources = {str(resource.uri) for resource in await client.list_resources()}
         check(
-            {"arasaac://skill", "arasaac://rules"} <= resources and declared_uri in resources,
-            "resources registered",
+            {"arasaac://skill", "arasaac://rules"} <= resources,
+            "resources registered (no viewer resource any more)",
         )
-        viewer = await client.read_resource(declared_uri)
-        viewer_html = viewer[0].text
         check(
-            "@modelcontextprotocol/ext-apps" in viewer_html and "ontoolresult" in viewer_html,
-            "MCP Apps viewer HTML is served",
+            not any(str(r).startswith("ui://") for r in resources),
+            "no ui:// viewer resource remains",
         )
-        # Hosts embed this HTML in a JS string (document.write), so the emitted
-        # script must itself be valid JS: no backticks / `${`, and no raw
-        # newlines inside string literals. See AGENTS.md.
-        check(
-            "`" not in viewer_html and "${" not in viewer_html,
-            "viewer HTML has no backticks or template placeholders",
-        )
-        await check_viewer_javascript(viewer_html)
 
         result = await client.call_tool("search_pictograms", {"query": "Regen", "limit": 3})
         check("Regen" in result.content[0].text, "search tool answers by word")
@@ -171,13 +133,21 @@ async def exercise() -> None:
                 "sentence": "Wenn es regnet, müssen alle Schüler drin bleiben.",
             },
         )
-        image = next((part for part in result.content if part.type == "image"), None)
-        check(image is not None and len(image.data) > 1000, "render_pictogram_sheet returns an image")
+        structured = result.structured_content or {}
+        image_url = str(structured.get("image_url", ""))
+        check(
+            image_url_ok(image_url),
+            "render result carries the image URL in structuredContent",
+        )
         debug_files = sorted(out_dir.glob("*.png"))
         check(bool(debug_files), f"render_pictogram_sheet writes a local debug file ({len(debug_files)})")
         check(
-            str((result.structured_content or {}).get("image", "")).startswith("data:image/png;base64,"),
-            "render result carries the image in structuredContent",
+            image_url.endswith("/" + debug_files[-1].name) if debug_files else False,
+            "image URL points at the saved debug file",
+        )
+        check(
+            not any(part.type == "image" for part in result.content),
+            "saved render keeps the base64 blob out of the chat content",
         )
         check(
             any("Datei:" in part.text for part in result.content if part.type == "text"),
@@ -198,8 +168,10 @@ async def exercise() -> None:
                 "sentence": "Mein Stundenplan",
             },
         )
-        image = next((part for part in result.content if part.type == "image"), None)
-        check(image is not None, "render_pictogram_layout (grid) returns an image")
+        check(
+            image_url_ok(str((result.structured_content or {}).get("image_url", ""))),
+            "render_pictogram_layout (grid) returns an image URL",
+        )
 
         result = await client.call_tool(
             "render_pictogram_layout",
@@ -216,8 +188,8 @@ async def exercise() -> None:
             },
         )
         check(
-            any(part.type == "image" for part in result.content),
-            "render_pictogram_layout (cards + arrow) returns an image",
+            image_url_ok(str((result.structured_content or {}).get("image_url", ""))),
+            "render_pictogram_layout (cards + arrow) returns an image URL",
         )
 
         bad_role = False

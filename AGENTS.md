@@ -168,25 +168,19 @@ python scripts/run_transcriber.py --mode json "…" > trace.jsonl   # full tool 
 - `prompt.md` is the single source: the pi agent body is exactly `prompt.md`, and
   the MCP prompt/resource serve the generated skill. Keep them identical.
 
-### MCP Apps viewer
-- The render tools declare `ui://arasaac/viewer.html` (`meta["ui"]["resourceUri"]`)
-  and the server serves that HTML (`SHEET_VIEW_HTML` in `mcp.py`). It uses the
-  standard **MCP Apps** extension (SEP-1865) via the `@modelcontextprotocol/ext-apps`
-  bridge — **host-agnostic**, no client-specific metadata (no `openai/*` keys).
-- Why: a plain `image` tool result reaches the model but is not shown to the user
-  in most hosts. The widget renders it. Keep the `image` result too (the model
-  needs it for `view_pictogram`-style verification).
-- Return the image in **both** places: `content` (model) and `structuredContent`
-  (the view). Hosts pass `structuredContent` to the app reliably, but do not
-  always forward `content` image blocks; the viewer prefers it and falls back.
-- The CSP `resourceDomains` must list every origin the widget loads; bump the
-  pinned `_EXT_APPS_URL` when the ext-apps SDK changes.
-- **The viewer's JS must be valid standalone JS.** Hosts embed the resource HTML
-  in a JS string (`document.write`), so `SHEET_VIEW_HTML` must contain no
-  backticks or `${`, and **no raw newlines inside JS string literals** — in a
-  Python triple-quoted string `"\n"` becomes a real newline and breaks the
-  script (`Invalid or unexpected token`). Use `String.fromCharCode(10)` instead.
-  `scripts/test_mcp.py` parses the emitted script with `node --check`.
+### Image delivery: web preview (no widget, no inline base64)
+- An `image` content block reaches the model but is **not shown to the user** in
+  most hosts, and dumping base64 into the result lands as a raw text blob in
+  the chat (observed in the ChatGPT desktop app). A tried MCP Apps widget
+  (`ui://` + ext-apps bridge) rendered, but the sandbox blocked both inline
+  `data:` images and `http://localhost` loads — so the widget was removed.
+- Instead: the render tools save the PNG to `output/` and return `image_url`
+  (`<ARASAAC_PUBLIC_BASE_URL>/sheet/<name>`, default `http://localhost:8000` —
+  matches the container port-forward used by the ChatGPT desktop app). The
+  server serves that URL via a fastmcp `custom_route` in `mcp.py`; the host
+  shows it as a web preview card.
+- Don't inline base64 PNGs in `structuredContent` — that's what produces the
+  giant blob. `--no-save` still returns an image content block for the model.
 
 ### The pi agent is locked down
 - `scripts/run_transcriber.py` runs pi with:

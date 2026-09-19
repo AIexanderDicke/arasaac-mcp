@@ -25,8 +25,6 @@ Requires the optional extra: ``uv sync --extra mcp``.
 from __future__ import annotations
 
 import argparse
-import base64
-import hashlib
 import io
 import os
 import secrets
@@ -37,15 +35,15 @@ from typing import Any
 try:  # optional dependency (see pyproject `[project.optional-dependencies] mcp`)
     from fastmcp import FastMCP
     from fastmcp.tools import ToolResult
-    from fastmcp.utilities.mime import UI_MIME_TYPE
     from fastmcp.utilities.types import Image as McpImage
     from mcp.types import TextContent
+    from starlette.responses import Response
 except ImportError:  # pragma: no cover - only hit without the extra
     FastMCP = None  # type: ignore[assignment]
     ToolResult = None  # type: ignore[assignment]
-    UI_MIME_TYPE = None  # type: ignore[assignment]
     McpImage = None  # type: ignore[assignment]
     TextContent = None  # type: ignore[assignment]
+    Response = None  # type: ignore[assignment]
 
 from .catalog import VALID_ROLES, Catalog, default_icons_dir, get_catalog
 from .layout import Entry, SheetOptions, render_layout, render_sheet
@@ -60,256 +58,22 @@ icons, verify ambiguous candidates with view_pictogram, keep the sequence short
 (aim ≤ 5, hard cap ~8) and render it once. Reply in German. See the
 `pictogram_transcriber` prompt for the full rules.\
 """
-
 # --------------------------------------------------------------------------- #
-# MCP Apps viewer (host-agnostic, MCP Apps extension / SEP-1865)
+# Image delivery: served over HTTP, shown by the host as a web preview
 # --------------------------------------------------------------------------- #
 #
-# Hosts that support MCP Apps render this UI resource inline for the render
-# tools and show the picture to the user — the plain `image` tool result only
-# reaches the model.  This uses the standard `ui://` + ext-apps bridge; it is
-# not tailored to any single host.
+# The picture is NOT inlined in the tool result.  Hosts either drop image
+# blocks or dump the base64 into the conversation as raw text, and widget
+# sandboxes block inline data: images.  Instead the server keeps the PNG
+# (debug_dir), exposes GET /sheet/<name>, and the result carries `image_url`.
+# Hosts like the ChatGPT desktop app render that URL as a web preview card.
 
-SHEET_VIEW_URI = "ui://arasaac/viewer.html"
-_EXT_APPS_CDN = "https://unpkg.com"
-_EXT_APPS_URL = f"{_EXT_APPS_CDN}/@modelcontextprotocol/ext-apps@1.0.1/app-with-deps"
-
-# Hosts cache `ui://` resources by URI, so a changed viewer would keep being
-# served from their cache.  Deriving the URI from a hash of the HTML means any
-# edit yields a fresh URI that cannot be stale.  The constant name above is
-# kept as the human-readable prefix.
-def _versioned_view_uri(html: str) -> str:
-    digest = hashlib.sha256(html.encode("utf-8")).hexdigest()[:12]
-    return f"ui://arasaac/viewer.{digest}.html"
+# Base URL under which this server is reachable.  The default matches the
+# container port-forward used by the ChatGPT desktop app (host: localhost:8000).
+def public_base_url() -> str:
+    return os.environ.get("ARASAAC_PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/")
 
 
-# Metadata attached to both render tools: point the host at the viewer and
-# allow it to load the bridge script.  Standard MCP Apps metadata only.
-def _tool_ui_meta(view_uri: str) -> dict[str, Any]:
-    return {
-        "ui": {
-            "resourceUri": view_uri,
-            "csp": {"resourceDomains": [_EXT_APPS_CDN], "connectDomains": [_EXT_APPS_CDN]},
-        },
-        "ui/resourceUri": view_uri,
-    }
-
-# Host-agnostic viewer.  Primary path is the standard MCP Apps bridge
-# (ext-apps); if the host instead exposes the OpenAI Apps SDK compatibility
-# API, that is used as a fallback.  A status line makes failures visible.
-SHEET_VIEW_HTML = """<!DOCTYPE html>
-<html lang="de">
-<head>
-  <meta charset="utf-8">
-  <meta name="color-scheme" content="light dark">
-  <title>ARASAAC Piktogramme</title>
-  <style>
-    :root { color-scheme: light dark; }
-    html, body { margin: 0; padding: 0; background: transparent; }
-    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-           display: flex; justify-content: center; }
-    .card { display: flex; flex-direction: column; gap: 10px; align-items: center;
-            padding: 12px; max-width: 100%; }
-    img { max-width: 100%; height: auto; border-radius: 10px; background: #fff;
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12); }
-    .caption { font-size: 14px; text-align: center; white-space: pre-line; }
-    .download { font-size: 12px; padding: 6px 12px; border-radius: 8px;
-                border: 1px solid currentColor; text-decoration: none; }
-    .status { opacity: 0.55; font-size: 11px; text-align: center;
-              font-family: ui-monospace, monospace; word-break: break-word; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <img id="sheet" alt="Piktogrammfolge" hidden>
-    <div id="caption" class="caption"></div>
-    <a id="download" class="download" download="piktogramme.png" hidden>Bild herunterladen</a>
-    <div id="status" class="status">viewer v7 · Skript lädt …</div>
-  </div>
-  <script>
-    window.__arasaacStatus = function (message) {
-      var el = document.getElementById("status");
-      if (el) el.textContent = "viewer v7 · " + message;
-    };
-    window.addEventListener("error", function (e) {
-      window.__arasaacStatus("Fehler: " + (e.message || e.error));
-    });
-    window.addEventListener("unhandledrejection", function (e) {
-      window.__arasaacStatus("Promise-Fehler: " + e.reason);
-    });
-  </script>
-  <script type="module">
-    const status = window.__arasaacStatus;
-    const img = document.getElementById("sheet");
-    const caption = document.getElementById("caption");
-    const download = document.getElementById("download");
-
-    function show(src, text, note) {
-      if (text) caption.textContent = text;
-      if (!src) { status("kein Bild gefunden · " + (note || "")); return; }
-      img.src = src;
-      img.hidden = false;
-      download.href = src;
-      download.hidden = false;
-      status("Bild angezeigt");
-    }
-
-    // Pull image data out of a raw string: either a full data: URI, or a bare
-    // base64 blob (the host may pass the payload as text, or strip the prefix).
-    function dataUriIn(s) {
-      const at = s.indexOf("data:image");
-      if (at !== -1) {
-        let end = s.length;
-        const stops = [34, 39, 92, 32, 41, 10, 44];
-        for (const code of stops) {
-          const i = s.indexOf(String.fromCharCode(code), at);
-          if (i !== -1 && i < end) end = i;
-        }
-        if (end - at > 64) return s.slice(at, end);
-      }
-      const marker = s.indexOf("base64,");
-      if (marker !== -1) {
-        let end = s.length;
-        for (const code of [34, 39, 92, 32, 41, 10]) {
-          const i = s.indexOf(String.fromCharCode(code), marker);
-          if (i !== -1 && i < end) end = i;
-        }
-        if (end - marker > 64) return "data:image/png;base64," + s.slice(marker + 7, end);
-      }
-      const bare = bareBase64(s);
-      if (bare) return bare;
-      return null;
-    }
-
-    // A PNG/JPEG/GIF always starts with a known base64 prefix.
-    function bareBase64(s) {
-      const heads = [["iVBOR", "image/png"], ["/9j/", "image/jpeg"], ["R0lGOD", "image/gif"]];
-      for (const pair of heads) {
-        const at = s.indexOf(pair[0]);
-        if (at === -1) continue;
-        let end = at;
-        while (end < s.length && isBase64(s.charAt(end))) end += 1;
-        if (end - at > 256) return "data:" + pair[1] + ";base64," + s.slice(at, end);
-      }
-      return null;
-    }
-
-    function isBase64(c) {
-      return (c >= "A" && c <= "Z") || (c >= "a" && c <= "z")
-        || (c >= "0" && c <= "9") || c === "+" || c === "/" || c === "=";
-    }
-
-    // Recursively search any JSON value for something that looks like an image:
-    // a data: URI, or a base64 payload paired with a mime type.
-    function findImage(node, seen) {
-      if (typeof node === "string") {
-        const uri = dataUriIn(node);
-        if (uri) return uri;
-        const head = node.charAt(0);
-        if (head === "{" || head === "[") {
-          try { return findImage(JSON.parse(node), seen); } catch (e) { return null; }
-        }
-        return null;
-      }
-      if (!node || typeof node !== "object") return null;
-      if (seen.indexOf(node) !== -1) return null;
-      seen.push(node);
-      if (Array.isArray(node)) {
-        for (let i = 0; i < node.length; i++) {
-          const hit = findImage(node[i], seen);
-          if (hit) return hit;
-        }
-        return null;
-      }
-      if (typeof node.image === "string" && node.image.indexOf("data:") === 0) return node.image;
-      if (typeof node.data === "string" && node.data.length > 512
-          && (node.type === "image" || node.mimeType || node.mime_type)) {
-        const mime = node.mimeType || node.mime_type || "image/png";
-        return "data:" + mime + ";base64," + node.data;
-      }
-      for (const key in node) {
-        const hit = findImage(node[key], seen);
-        if (hit) return hit;
-      }
-      return null;
-    }
-
-    // Short description of what we actually received, for the status line.
-    function describe(node, depth) {
-      depth = depth || 0;
-      if (node === null) return "null";
-      if (Array.isArray(node)) {
-        const parts = depth < 2
-          ? node.slice(0, 3).map((v) => describe(v, depth + 1))
-          : [];
-        return "array[" + node.length + "]" + (parts.length ? "(" + parts.join("; ") + ")" : "");
-      }
-      const kind = typeof node;
-      if (kind === "string") return "string(" + node.length + ") " + node.slice(0, 60);
-      if (kind === "object") {
-        const keys = Object.keys(node);
-        if (depth < 2) {
-          return "object{" + keys.slice(0, 6).map((k) => k + ":" + describe(node[k], depth + 1)).join(", ") + "}";
-        }
-        return "object{" + keys.slice(0, 6).join(",") + "}";
-      }
-      return kind + "(" + String(node).slice(0, 40) + ")";
-    }
-
-    function findText(node) {
-      if (node && typeof node.words === "string") return node.words;
-      const blocks = (node && node.content) || [];
-      return blocks.filter((b) => b && b.type === "text").map((b) => b.text)
-        .join(String.fromCharCode(10));
-    }
-
-    function fromResult(payload) {
-      const src = findImage(payload, []);
-      show(src, findText(payload), src ? "" : describe(payload));
-    }
-
-    // 1) Standard, host-agnostic MCP Apps bridge.
-    (async () => {
-      status("verbinde (ext-apps) …");
-      try {
-        const { App } = await import("__EXT_APPS_URL__");
-        const app = new App({ name: "ARASAAC Sheet Viewer", version: "2.0.0" });
-        app.ontoolresult = (params) => fromResult(params);
-        app.onhostcontextchanged = (ctx) => {
-          const insets = ctx && ctx.safeAreaInsets;
-          if (!insets) return;
-          document.body.style.paddingTop = insets.top + "px";
-          document.body.style.paddingRight = insets.right + "px";
-          document.body.style.paddingBottom = insets.bottom + "px";
-          document.body.style.paddingLeft = insets.left + "px";
-        };
-        await app.connect();
-        status("ext-apps verbunden, warte auf Ergebnis …");
-      } catch (error) {
-        status("ext-apps nicht verfügbar (" + error + ")");
-      }
-    })();
-
-    // 2) OpenAI Apps SDK compatibility API, if the host provides it.
-    function fromOpenAI() {
-      const openai = window.openai;
-      if (!openai) return false;
-      const output = openai.toolOutput;
-      if (output && (output.image || output.words)) {
-        status("window.openai Ergebnis");
-        fromResult(output);
-      } else {
-        status("window.openai erkannt (noch kein Ergebnis)");
-      }
-      return true;
-    }
-    if (!fromOpenAI()) {
-      window.addEventListener("openai:set_globals", fromOpenAI);
-    }
-  </script>
-</body>
-</html>
-""".replace("__EXT_APPS_URL__", _EXT_APPS_URL)
 
 
 # --------------------------------------------------------------------------- #
@@ -424,17 +188,43 @@ def render_word_sheet(
     saved = _save_png(image, output_dir)
     if saved is not None:
         lines.append(f"Datei: {saved}")
-    # structuredContent is what MCP Apps hosts pass to the viewer; `content` is
-    # for the model. Return both so the picture is shown either way.
+    return _render_result(lines, png, saved, rendered_words, sentence, meaning)
+
+
+def _render_result(
+    lines: list[str],
+    png: bytes,
+    saved: Path | None,
+    words: str | None = None,
+    sentence: str | None = None,
+    meaning: str | None = None,
+) -> "ToolResult":
+    """Build the tool result for a rendered sheet.
+
+    The picture is not inlined: hosts either drop image blocks or dump the
+    base64 as raw text into the conversation.  Instead the saved PNG is served
+    under ``/sheet/<name>`` and the result carries ``image_url`` — hosts show
+    that URL as a web preview.  Without a saved file (``--no-save``) the image
+    still travels as an image content block for the model.
+    """
+    structured: dict[str, Any] = {
+        "sentence": sentence,
+        "meaning": meaning,
+        "mime_type": "image/png",
+    }
+    if words is not None:
+        structured["words"] = words
+    if saved is not None:
+        url = f"{public_base_url()}/sheet/{saved.name}"
+        lines.append(f"Bild: {url}")
+        structured["image_url"] = url
+        return ToolResult(
+            content=[_text("\n".join(lines))],
+            structured_content=structured,
+        )
     return ToolResult(
         content=[_text("\n".join(lines)), _image_from_bytes(png)],
-        structured_content={
-            "words": rendered_words,
-            "sentence": sentence,
-            "meaning": meaning,
-            "image": "data:image/png;base64," + base64.b64encode(png).decode(),
-            "mime_type": "image/png",
-        },
+        structured_content=structured,
     )
 
 
@@ -466,15 +256,7 @@ def render_tree(
     saved = _save_png(image, output_dir)
     if saved is not None:
         lines.append(f"Datei: {saved}")
-    return ToolResult(
-        content=[_text("\n".join(lines)), _image_from_bytes(png)],
-        structured_content={
-            "sentence": sentence,
-            "meaning": meaning,
-            "image": "data:image/png;base64," + base64.b64encode(png).decode(),
-            "mime_type": "image/png",
-        },
-    )
+    return _render_result(lines, png, saved, None, sentence, meaning)
 
 
 # --------------------------------------------------------------------------- #
@@ -491,8 +273,8 @@ def create_server(
 
     ``icons_dir`` defaults to ``ARASAAC_ICONS_DIR``.  When ``save`` is true
     (the default), rendered sheets are also written to ``output_dir`` —
-    ``ARASAAC_OUTPUT_DIR`` or ``./output`` — purely for local debugging; the
-    image still travels in the tool result.
+    ``ARASAAC_OUTPUT_DIR`` or ``./output`` — and served under ``/sheet/<name>``
+    so the result can point the host at the image by URL.
     """
     if FastMCP is None:  # pragma: no cover - only hit without the extra
         raise SystemExit(
@@ -503,8 +285,6 @@ def create_server(
     catalog = get_catalog(icons_dir)
     debug_dir = (default_output_dir() if output_dir is None else Path(output_dir)) if save else None
     server = FastMCP(name="arasaac-pictograms", instructions=INSTRUCTIONS)
-    view_uri = _versioned_view_uri(SHEET_VIEW_HTML)
-    tool_ui_meta = _tool_ui_meta(view_uri)
 
     @server.tool
     def search_pictograms(query: str, limit: int = 25) -> str:
@@ -525,7 +305,7 @@ def create_server(
         """
         return view(catalog, word)
 
-    @server.tool(meta=tool_ui_meta)
+    @server.tool
     def render_pictogram_sheet(
         words: list[str],
         roles: list[str] | None = None,
@@ -545,7 +325,7 @@ def create_server(
             catalog, words, roles, sentence, meaning, labels, columns, icon_size, debug_dir
         )
 
-    @server.tool(meta=tool_ui_meta)
+    @server.tool
     def render_pictogram_layout(
         layout: dict[str, Any],
         sentence: str | None = None,
@@ -566,6 +346,21 @@ def create_server(
             catalog, layout, sentence, meaning, page_size, labels, icon_size, debug_dir
         )
 
+    @server.custom_route("/sheet/{name}", methods=["GET"])
+    async def sheet_file(request) -> "Response":
+        """Serve a rendered sheet PNG by name.
+
+        The tool results reference the PNG by URL; hosts (e.g. the ChatGPT
+        desktop app) show it as a web preview card.
+        """
+        if debug_dir is None:
+            return Response(status_code=404)
+        name = request.path_params["name"]
+        path = (debug_dir / name).resolve()
+        if path.parent != debug_dir.resolve() or not path.is_file():
+            return Response(status_code=404)
+        return Response(content=path.read_bytes(), media_type="image/png")
+
     @server.prompt(
         name="pictogram_transcriber",
         description="The full ARASAAC transcriber recipe plus the German text to depict.",
@@ -576,17 +371,6 @@ def create_server(
             f"{rules_text()}\n\n---\n\n"
             f"Transcribe the following German text into pictograms:\n\n{text}"
         )
-
-    @server.resource(
-        view_uri,
-        name="arasaac sheet viewer",
-        description="MCP Apps viewer that renders the generated pictogram sheet.",
-        mime_type=UI_MIME_TYPE,
-        meta={"ui": {"csp": {"resourceDomains": [_EXT_APPS_CDN]}}},
-    )
-    def sheet_viewer() -> str:
-        """The MCP Apps viewer HTML (standard ui:// resource)."""
-        return SHEET_VIEW_HTML
 
     @server.resource(
         "arasaac://skill",
