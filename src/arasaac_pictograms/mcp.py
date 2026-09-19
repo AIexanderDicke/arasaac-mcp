@@ -113,12 +113,12 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
     <img id="sheet" alt="Piktogrammfolge" hidden>
     <div id="caption" class="caption"></div>
     <a id="download" class="download" download="piktogramme.png" hidden>Bild herunterladen</a>
-    <div id="status" class="status">viewer v6 · Skript lädt …</div>
+    <div id="status" class="status">viewer v7 · Skript lädt …</div>
   </div>
   <script>
     window.__arasaacStatus = function (message) {
       var el = document.getElementById("status");
-      if (el) el.textContent = "viewer v6 · " + message;
+      if (el) el.textContent = "viewer v7 · " + message;
     };
     window.addEventListener("error", function (e) {
       window.__arasaacStatus("Fehler: " + (e.message || e.error));
@@ -143,17 +143,49 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
       status("Bild angezeigt");
     }
 
-    // Pull a data: URI out of a raw string (the host may pass content as JSON text).
+    // Pull image data out of a raw string: either a full data: URI, or a bare
+    // base64 blob (the host may pass the payload as text, or strip the prefix).
     function dataUriIn(s) {
       const at = s.indexOf("data:image");
-      if (at === -1) return null;
-      let end = s.length;
-      const stops = [34, 39, 92, 32, 41, 10, 44];
-      for (const code of stops) {
-        const i = s.indexOf(String.fromCharCode(code), at);
-        if (i !== -1 && i < end) end = i;
+      if (at !== -1) {
+        let end = s.length;
+        const stops = [34, 39, 92, 32, 41, 10, 44];
+        for (const code of stops) {
+          const i = s.indexOf(String.fromCharCode(code), at);
+          if (i !== -1 && i < end) end = i;
+        }
+        if (end - at > 64) return s.slice(at, end);
       }
-      return end - at > 64 ? s.slice(at, end) : null;
+      const marker = s.indexOf("base64,");
+      if (marker !== -1) {
+        let end = s.length;
+        for (const code of [34, 39, 92, 32, 41, 10]) {
+          const i = s.indexOf(String.fromCharCode(code), marker);
+          if (i !== -1 && i < end) end = i;
+        }
+        if (end - marker > 64) return "data:image/png;base64," + s.slice(marker + 7, end);
+      }
+      const bare = bareBase64(s);
+      if (bare) return bare;
+      return null;
+    }
+
+    // A PNG/JPEG/GIF always starts with a known base64 prefix.
+    function bareBase64(s) {
+      const heads = [["iVBOR", "image/png"], ["/9j/", "image/jpeg"], ["R0lGOD", "image/gif"]];
+      for (const pair of heads) {
+        const at = s.indexOf(pair[0]);
+        if (at === -1) continue;
+        let end = at;
+        while (end < s.length && isBase64(s.charAt(end))) end += 1;
+        if (end - at > 256) return "data:" + pair[1] + ";base64," + s.slice(at, end);
+      }
+      return null;
+    }
+
+    function isBase64(c) {
+      return (c >= "A" && c <= "Z") || (c >= "a" && c <= "z")
+        || (c >= "0" && c <= "9") || c === "+" || c === "/" || c === "=";
     }
 
     // Recursively search any JSON value for something that looks like an image:
@@ -192,13 +224,25 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
     }
 
     // Short description of what we actually received, for the status line.
-    function describe(node) {
+    function describe(node, depth) {
+      depth = depth || 0;
       if (node === null) return "null";
-      if (Array.isArray(node)) return "array[" + node.length + "]";
+      if (Array.isArray(node)) {
+        const parts = depth < 2
+          ? node.slice(0, 3).map((v) => describe(v, depth + 1))
+          : [];
+        return "array[" + node.length + "]" + (parts.length ? "(" + parts.join("; ") + ")" : "");
+      }
       const kind = typeof node;
-      if (kind === "string") return "string(" + node.length + ") " + node.slice(0, 120);
-      if (kind === "object") return "object{" + Object.keys(node).join(",") + "}";
-      return kind;
+      if (kind === "string") return "string(" + node.length + ") " + node.slice(0, 60);
+      if (kind === "object") {
+        const keys = Object.keys(node);
+        if (depth < 2) {
+          return "object{" + keys.slice(0, 6).map((k) => k + ":" + describe(node[k], depth + 1)).join(", ") + "}";
+        }
+        return "object{" + keys.slice(0, 6).join(",") + "}";
+      }
+      return kind + "(" + String(node).slice(0, 40) + ")";
     }
 
     function findText(node) {
