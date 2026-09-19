@@ -113,12 +113,12 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
     <img id="sheet" alt="Piktogrammfolge" hidden>
     <div id="caption" class="caption"></div>
     <a id="download" class="download" download="piktogramme.png" hidden>Bild herunterladen</a>
-    <div id="status" class="status">viewer v5 · Skript lädt …</div>
+    <div id="status" class="status">viewer v6 · Skript lädt …</div>
   </div>
   <script>
     window.__arasaacStatus = function (message) {
       var el = document.getElementById("status");
-      if (el) el.textContent = "viewer v5 · " + message;
+      if (el) el.textContent = "viewer v6 · " + message;
     };
     window.addEventListener("error", function (e) {
       window.__arasaacStatus("Fehler: " + (e.message || e.error));
@@ -143,9 +143,31 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
       status("Bild angezeigt");
     }
 
+    // Pull a data: URI out of a raw string (the host may pass content as JSON text).
+    function dataUriIn(s) {
+      const at = s.indexOf("data:image");
+      if (at === -1) return null;
+      let end = s.length;
+      const stops = [34, 39, 92, 32, 41, 10, 44];
+      for (const code of stops) {
+        const i = s.indexOf(String.fromCharCode(code), at);
+        if (i !== -1 && i < end) end = i;
+      }
+      return end - at > 64 ? s.slice(at, end) : null;
+    }
+
     // Recursively search any JSON value for something that looks like an image:
     // a data: URI, or a base64 payload paired with a mime type.
     function findImage(node, seen) {
+      if (typeof node === "string") {
+        const uri = dataUriIn(node);
+        if (uri) return uri;
+        const head = node.charAt(0);
+        if (head === "{" || head === "[") {
+          try { return findImage(JSON.parse(node), seen); } catch (e) { return null; }
+        }
+        return null;
+      }
       if (!node || typeof node !== "object") return null;
       if (seen.indexOf(node) !== -1) return null;
       seen.push(node);
@@ -169,6 +191,16 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
       return null;
     }
 
+    // Short description of what we actually received, for the status line.
+    function describe(node) {
+      if (node === null) return "null";
+      if (Array.isArray(node)) return "array[" + node.length + "]";
+      const kind = typeof node;
+      if (kind === "string") return "string(" + node.length + ") " + node.slice(0, 120);
+      if (kind === "object") return "object{" + Object.keys(node).join(",") + "}";
+      return kind;
+    }
+
     function findText(node) {
       if (node && typeof node.words === "string") return node.words;
       const blocks = (node && node.content) || [];
@@ -178,7 +210,7 @@ SHEET_VIEW_HTML = """<!DOCTYPE html>
 
     function fromResult(payload) {
       const src = findImage(payload, []);
-      show(src, findText(payload), src ? "" : Object.keys(payload || {}).join(","));
+      show(src, findText(payload), src ? "" : describe(payload));
     }
 
     // 1) Standard, host-agnostic MCP Apps bridge.
