@@ -175,12 +175,12 @@ uv run --extra mcp python scripts/test_mcp.py     # offline tests, no LLM
 
 Rendered sheets are saved to `output/` (override with `--output-dir` /
 `ARASAAC_OUTPUT_DIR`, disable with `--no-save`) and served under `/sheet/<name>`;
-the tool result carries that `image_url` and its text block reports the URL.
-Hosts like the ChatGPT desktop app show the URL as a web preview card — the
-base URL defaults to `http://localhost:8000` (the container port-forward used
-by the desktop app) and can be overridden with `ARASAAC_PUBLIC_BASE_URL`.
-The image is deliberately **not** inlined as base64: hosts either drop image
-blocks or dump the base64 into the chat as raw text.
+the tool's text block reports the URL. Hosts like the ChatGPT desktop app
+show the URL as a web preview card — the base URL defaults to
+`http://localhost:8000` (the container port-forward used by the desktop app)
+and can be overridden with `ARASAAC_PUBLIC_BASE_URL`. Render results carry no
+`structuredContent` (hosts dump it as raw JSON) and no inline base64: hosts
+either drop image blocks or dump them as raw text.
 
 ### Connecting a host
 

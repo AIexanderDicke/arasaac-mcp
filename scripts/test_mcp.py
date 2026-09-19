@@ -133,17 +133,21 @@ async def exercise() -> None:
                 "sentence": "Wenn es regnet, müssen alle Schüler drin bleiben.",
             },
         )
-        structured = result.structured_content or {}
-        image_url = str(structured.get("image_url", ""))
+        text = "\n".join(part.text for part in result.content if part.type == "text")
+        image_url = next((line.split()[-1] for line in text.splitlines() if line.startswith("Bild: ")), "")
         check(
             image_url_ok(image_url),
-            "render result carries the image URL in structuredContent",
+            "render text reports the image URL (the host previews it)",
         )
         debug_files = sorted(out_dir.glob("*.png"))
         check(bool(debug_files), f"render_pictogram_sheet writes a local debug file ({len(debug_files)})")
         check(
             image_url.endswith("/" + debug_files[-1].name) if debug_files else False,
             "image URL points at the saved debug file",
+        )
+        check(
+            result.structured_content is None,
+            "render result carries no structuredContent (hosts dump it as JSON)",
         )
         check(
             not any(part.type == "image" for part in result.content),
@@ -168,9 +172,10 @@ async def exercise() -> None:
                 "sentence": "Mein Stundenplan",
             },
         )
+        grid_text = "\n".join(part.text for part in result.content if part.type == "text")
         check(
-            image_url_ok(str((result.structured_content or {}).get("image_url", ""))),
-            "render_pictogram_layout (grid) returns an image URL",
+            image_url_ok(next((l.split()[-1] for l in grid_text.splitlines() if l.startswith("Bild: ")), "")),
+            "render_pictogram_layout (grid) reports an image URL",
         )
 
         result = await client.call_tool(
@@ -187,9 +192,10 @@ async def exercise() -> None:
                 }
             },
         )
+        cards_text = "\n".join(part.text for part in result.content if part.type == "text")
         check(
-            image_url_ok(str((result.structured_content or {}).get("image_url", ""))),
-            "render_pictogram_layout (cards + arrow) returns an image URL",
+            image_url_ok(next((l.split()[-1] for l in cards_text.splitlines() if l.startswith("Bild: ")), "")),
+            "render_pictogram_layout (cards + arrow) reports an image URL",
         )
 
         bad_role = False

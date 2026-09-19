@@ -174,13 +174,19 @@ python scripts/run_transcriber.py --mode json "…" > trace.jsonl   # full tool 
   the chat (observed in the ChatGPT desktop app). A tried MCP Apps widget
   (`ui://` + ext-apps bridge) rendered, but the sandbox blocked both inline
   `data:` images and `http://localhost` loads — so the widget was removed.
-- Instead: the render tools save the PNG to `output/` and return `image_url`
-  (`<ARASAAC_PUBLIC_BASE_URL>/sheet/<name>`, default `http://localhost:8000` —
-  matches the container port-forward used by the ChatGPT desktop app). The
-  server serves that URL via a fastmcp `custom_route` in `mcp.py`; the host
-  shows it as a web preview card.
-- Don't inline base64 PNGs in `structuredContent` — that's what produces the
-  giant blob. `--no-save` still returns an image content block for the model.
+- Instead: the render tools save the PNG to `output/`, serve it via a fastmcp
+  `custom_route` (`GET /sheet/<name>` under `ARASAAC_PUBLIC_BASE_URL`, default
+  `http://localhost:8000` — matches the container port-forward used by the
+  ChatGPT desktop app) and report the URL in the **text block**.
+- The **model must echo the URL as a plain link** in its reply — that is what
+  produces the host's web preview card: ChatGPT renders URLs in the assistant
+  message client-side (localhost reachable). The render tools' descriptions
+  say so, and forbid the markdown-image form (`![…]`), which ChatGPT loads
+  through a backend proxy that cannot reach localhost (broken image).
+- **No `structuredContent` in render results** — ChatGPT dumps it as a raw
+  JSON object into the chat. Everything travels in the text block.
+- Don't inline base64 PNGs in the result either — that produces the giant
+  blob. `--no-save` still returns an image content block for the model.
 
 ### The pi agent is locked down
 - `scripts/run_transcriber.py` runs pi with:

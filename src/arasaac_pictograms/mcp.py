@@ -188,46 +188,26 @@ def render_word_sheet(
     saved = _save_png(image, output_dir)
     if saved is not None:
         lines.append(f"Datei: {saved}")
-    return _render_result(lines, png, saved, rendered_words, sentence, meaning)
+    return _render_result(lines, png, saved)
 
 
-def _render_result(
-    lines: list[str],
-    png: bytes,
-    saved: Path | None,
-    words: str | None = None,
-    sentence: str | None = None,
-    meaning: str | None = None,
-) -> "ToolResult":
+def _render_result(lines: list[str], png: bytes, saved: Path | None) -> "ToolResult":
     """Build the tool result for a rendered sheet.
 
     The picture is not inlined: hosts either drop image blocks or dump the
     base64 as raw text into the conversation.  Instead the saved PNG is served
-    under ``/sheet/<name>`` and the URL is reported in the text block AND in
-    ``image_url`` (structuredContent) — the host shows it as a web preview.
-    The URL must stay in the text (the preview is built from it); the render
-    tools' descriptions instruct the model not to echo it as a markdown image.
-    Without a saved file (``--no-save``) the image still travels as an image
-    content block for the model.
+    under ``/sheet/<name>`` and the URL is reported in the text block; the
+    host shows that URL as a web preview (from the model's reply, which is
+    told to link it).  No structuredContent: hosts dump it as raw JSON into
+    the conversation.  Without a saved file (``--no-save``) the image still
+    travels as an image content block for the model.
     """
-    structured: dict[str, Any] = {
-        "sentence": sentence,
-        "meaning": meaning,
-        "mime_type": "image/png",
-    }
-    if words is not None:
-        structured["words"] = words
     if saved is not None:
         url = f"{public_base_url()}/sheet/{saved.name}"
         lines.append(f"Bild: {url}")
-        structured["image_url"] = url
-        return ToolResult(
-            content=[_text("\n".join(lines))],
-            structured_content=structured,
-        )
+        return ToolResult(content=[_text("\n".join(lines))])
     return ToolResult(
         content=[_text("\n".join(lines)), _image_from_bytes(png)],
-        structured_content=structured,
     )
 
 
@@ -259,7 +239,7 @@ def render_tree(
     saved = _save_png(image, output_dir)
     if saved is not None:
         lines.append(f"Datei: {saved}")
-    return _render_result(lines, png, saved, None, sentence, meaning)
+    return _render_result(lines, png, saved)
 
 
 # --------------------------------------------------------------------------- #
