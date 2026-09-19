@@ -28,6 +28,7 @@ import argparse
 import io
 import os
 import secrets
+import shutil
 import time
 from pathlib import Path
 from typing import Any
@@ -137,13 +138,32 @@ def search(catalog: Catalog, query: str, limit: int = 25) -> str:
     return f'Gefunden: {len(lines)} Treffer für "{query}":\n' + "\n".join(lines)
 
 
-def view(catalog: Catalog, word: str) -> list[Any]:
-    """Return a pictogram image (plus its label) identified by word."""
+def view(catalog: Catalog, word: str, output_dir: Path | None) -> list[Any]:
+    """Return a pictogram (plus its label) identified by word.
+
+    With ``output_dir`` set the icon is saved and served under ``/sheet/`` —
+    the result is text-only with a ``Bild:`` URL line.  Hosts like ChatGPT
+    dump image content blocks as raw JSON into the conversation, and strip
+    them before the model sees them, so the URL is the useful channel there.
+    Without saving (``--no-save``) the image block is returned directly for
+    hosts that pass images to the model.
+    """
     pic = catalog.resolve(word)
     synonyms = ", ".join(pic.keywords[1:])
     label = catalog.label_of(pic)
     caption = f'Zeige "{label}"' + (f" (Synonyme: {synonyms})" if synonyms else "")
-    return [_text(caption), _image_from_path(catalog.icons_dir / pic.file)]
+    if output_dir is None:
+        return [_text(caption), _image_from_path(catalog.icons_dir / pic.file)]
+    path = _save_icon(catalog.icons_dir / pic.file, output_dir)
+    url = f"{public_base_url()}/sheet/{path.name}"
+    return [_text(caption), _text(f"Bild: {url}")]
+
+
+def _save_icon(icon_path: Path, output_dir: Path) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / f"icon_{int(time.time() * 1000)}-{secrets.token_hex(2)}-{icon_path.name}"
+    path.write_bytes(icon_path.read_bytes())
+    return path
 
 
 def render_word_sheet(
@@ -285,8 +305,12 @@ def create_server(
 
         Use it to check what a candidate actually depicts before selecting it —
         ARASAAC words can mislead (e.g. `verbleiben`, `vor`).
+
+        Gib die Bild-URL in deiner Antwort als reinen Link aus ([Piktogramm](URL)
+        oder Klartext) — NIE als Markdown-Bild (![...]): eingebettete Bilder
+        werden über einen Proxy geladen, der localhost nicht erreicht.
         """
-        return view(catalog, word)
+        return view(catalog, word, debug_dir)
 
     @server.tool
     def render_pictogram_sheet(

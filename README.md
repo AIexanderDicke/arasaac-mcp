@@ -165,7 +165,7 @@ uv run --extra mcp python scripts/test_mcp.py     # offline tests, no LLM
 | MCP surface | Name | Purpose |
 | --- | --- | --- |
 | tool | `search_pictograms` | German word search (descriptions + metadata) |
-| tool | `view_pictogram` | pictogram image for visual verification |
+| tool | `view_pictogram` | pictogram icon — URL-based (image block only with `--no-save`) |
 | tool | `render_pictogram_sheet` | ordered word sequence → strip image |
 | tool | `render_pictogram_layout` | layout tree (grid/cards/canvas) → image |
 | prompt | `pictogram_transcriber` | full recipe + the German text |

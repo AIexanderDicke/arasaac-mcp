@@ -122,8 +122,16 @@ async def exercise() -> None:
         check("Regen" in result.content[0].text, "search tool answers by word")
 
         result = await client.call_tool("view_pictogram", {"word": "Auto"})
-        image = next((part for part in result.content if part.type == "image"), None)
-        check(image is not None and image.mime_type == "image/png", "view_pictogram returns a PNG")
+        view_text = "\n".join(part.text for part in result.content if part.type == "text")
+        check("Zeige \"Auto\"" in view_text, "view_pictogram reports the label")
+        check(
+            image_url_ok(next((l.split()[-1] for l in view_text.splitlines() if l.startswith("Bild: ")), "")),
+            "view_pictogram reports the icon URL (no image block dumped as JSON)",
+        )
+        check(
+            not any(part.type == "image" for part in result.content),
+            "view_pictogram carries no image block when saving is on",
+        )
 
         result = await client.call_tool(
             "render_pictogram_sheet",

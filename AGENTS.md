@@ -185,6 +185,11 @@ python scripts/run_transcriber.py --mode json "…" > trace.jsonl   # full tool 
   through a backend proxy that cannot reach localhost (broken image).
 - **No `structuredContent` in render results** — ChatGPT dumps it as a raw
   JSON object into the chat. Everything travels in the text block.
+- **`view_pictogram` is URL-based too** (same reason): the icon is copied into
+  `output/` as `icon_<ts>_<id>_<name>.png`, served under `/sheet/`, and the
+  result is text-only. An image content block is returned only without saving
+  (`--no-save`) for hosts that pass images to the model. Its description also
+  forbids the markdown-image echo.
 - Don't inline base64 PNGs in the result either — that produces the giant
   blob. `--no-save` still returns an image content block for the model.
 
