@@ -172,6 +172,11 @@ uv run --extra mcp python scripts/test_mcp.py     # offline tests, no LLM
 | resource | `arasaac://skill` | the Agent Skill (`SKILL.md`) |
 | resource | `arasaac://rules` | the full recipe (skill + references) |
 
+For local debugging, every rendered sheet is *also* written to disk — `output/`
+by default, override with `--output-dir` / `ARASAAC_OUTPUT_DIR`, disable with
+`--no-save` — and the tool's text block reports the path. The image itself
+always travels in the tool result; the file is only a convenience.
+
 ### Connecting a host
 
 The server speaks **stdio** (default) or **streamable HTTP** (`/mcp`). A stdio

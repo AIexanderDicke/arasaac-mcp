@@ -26,6 +26,9 @@ from __future__ import annotations
 
 import argparse
 import io
+import os
+import secrets
+import time
 from pathlib import Path
 from typing import Any
 
@@ -76,6 +79,22 @@ def _image_from_pil(image: Any) -> Any:
     return _image_from_bytes(buffer.getvalue())
 
 
+def default_output_dir() -> Path:
+    """Where debug renders are written (``ARASAAC_OUTPUT_DIR`` or ``./output``)."""
+    env = os.environ.get("ARASAAC_OUTPUT_DIR")
+    return Path(env) if env else Path.cwd() / "output"
+
+
+def _save_png(image: Any, output_dir: Path | None) -> Path | None:
+    """Persist a rendered sheet locally for debugging.  ``None`` disables it."""
+    if output_dir is None:
+        return None
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / f"sheet_{int(time.time() * 1000)}-{secrets.token_hex(2)}.png"
+    image.save(path, format="PNG")
+    return path
+
+
 # --------------------------------------------------------------------------- #
 # Tool implementations (plain functions, so they are testable without MCP)
 # --------------------------------------------------------------------------- #
@@ -112,6 +131,7 @@ def render_word_sheet(
     labels: bool = True,
     columns: int | None = None,
     icon_size: int | None = None,
+    output_dir: Path | None = None,
 ) -> list[Any]:
     """Render an ordered list of pictogram words to a strip image."""
     if not words:
@@ -139,7 +159,11 @@ def render_word_sheet(
     )
     image = render_sheet(entries, options, icons_dir=catalog.icons_dir)
     rendered_words = ", ".join(catalog.label_of(catalog.resolve(word)) for word in words)
-    return [_text(f"Gerendertes Piktogrammblatt: {rendered_words}"), _image_from_pil(image)]
+    lines = [f"Gerendertes Piktogrammblatt: {rendered_words}"]
+    saved = _save_png(image, output_dir)
+    if saved is not None:
+        lines.append(f"Datei: {saved}")
+    return [_text("\n".join(lines)), _image_from_pil(image)]
 
 
 def render_tree(
@@ -150,6 +174,7 @@ def render_tree(
     page_size: str | None = None,
     labels: bool = True,
     icon_size: int | None = None,
+    output_dir: Path | None = None,
 ) -> list[Any]:
     """Render a free layout tree (grid/cards/canvas) of pictogram words."""
     if not isinstance(layout, dict):
@@ -164,7 +189,11 @@ def render_tree(
         **({"icon_size": icon_size} if icon_size else {}),
     )
     image = render_layout(spec, options, icons_dir=catalog.icons_dir)
-    return [_text("Gerendertes Piktogramm-Layout"), _image_from_pil(image)]
+    lines = ["Gerendertes Piktogramm-Layout"]
+    saved = _save_png(image, output_dir)
+    if saved is not None:
+        lines.append(f"Datei: {saved}")
+    return [_text("\n".join(lines)), _image_from_pil(image)]
 
 
 # --------------------------------------------------------------------------- #
@@ -172,8 +201,18 @@ def render_tree(
 # --------------------------------------------------------------------------- #
 
 
-def create_server(icons_dir: Path | str | None = None) -> "FastMCP":
-    """Build the MCP server.  ``icons_dir`` defaults to ``ARASAAC_ICONS_DIR``."""
+def create_server(
+    icons_dir: Path | str | None = None,
+    output_dir: Path | str | None = None,
+    save: bool = True,
+) -> "FastMCP":
+    """Build the MCP server.
+
+    ``icons_dir`` defaults to ``ARASAAC_ICONS_DIR``.  When ``save`` is true
+    (the default), rendered sheets are also written to ``output_dir`` —
+    ``ARASAAC_OUTPUT_DIR`` or ``./output`` — purely for local debugging; the
+    image still travels in the tool result.
+    """
     if FastMCP is None:  # pragma: no cover - only hit without the extra
         raise SystemExit(
             "Der MCP-Server braucht das optionale Extra 'mcp'. "
@@ -181,6 +220,7 @@ def create_server(icons_dir: Path | str | None = None) -> "FastMCP":
         )
 
     catalog = get_catalog(icons_dir)
+    debug_dir = (default_output_dir() if output_dir is None else Path(output_dir)) if save else None
     server = FastMCP(name="arasaac-pictograms", instructions=INSTRUCTIONS)
 
     @server.tool
@@ -219,7 +259,7 @@ def create_server(icons_dir: Path | str | None = None) -> "FastMCP":
         MISC (Fitzgerald colour frames). Call it once for the primary sequence.
         """
         return render_word_sheet(
-            catalog, words, roles, sentence, meaning, labels, columns, icon_size
+            catalog, words, roles, sentence, meaning, labels, columns, icon_size, debug_dir
         )
 
     @server.tool
@@ -239,7 +279,9 @@ def create_server(icons_dir: Path | str | None = None) -> "FastMCP":
         string is an icon shorthand and a list becomes a column. Node types:
         icon, text, row, column, card, grid, arrow, spacer, divider, canvas.
         """
-        return render_tree(catalog, layout, sentence, meaning, page_size, labels, icon_size)
+        return render_tree(
+            catalog, layout, sentence, meaning, page_size, labels, icon_size, debug_dir
+        )
 
     @server.prompt(
         name="pictogram_transcriber",
@@ -294,13 +336,24 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Pictogram directory (default: ARASAAC_ICONS_DIR or ./icons).",
     )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Write each rendered sheet here for debugging (default: ARASAAC_OUTPUT_DIR or ./output).",
+    )
+    parser.add_argument(
+        "--no-save",
+        action="store_true",
+        help="Do not write debug files; only return the image in the tool result.",
+    )
     args = parser.parse_args(argv)
 
     icons_dir = args.icons_dir or default_icons_dir()
     if not Path(icons_dir).is_dir():
         parser.error(f"icons directory not found: {icons_dir}")
 
-    server = create_server(icons_dir)
+    server = create_server(icons_dir, output_dir=args.output_dir, save=not args.no_save)
     if args.transport == "stdio":
         server.run(transport="stdio")
     else:

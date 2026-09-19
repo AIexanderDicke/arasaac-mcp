@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -86,7 +87,8 @@ print("\n== mcp server ==")
 async def exercise() -> None:
     from fastmcp import Client
 
-    server = create_server(ROOT / "icons")
+    out_dir = Path(tempfile.mkdtemp(prefix="arasaac-mcp-test-"))
+    server = create_server(ROOT / "icons", output_dir=out_dir)
     async with Client(server) as client:
         tools = {tool.name for tool in await client.list_tools()}
         check(
@@ -120,6 +122,12 @@ async def exercise() -> None:
         )
         image = next((part for part in result.content if part.type == "image"), None)
         check(image is not None and len(image.data) > 1000, "render_pictogram_sheet returns an image")
+        debug_files = sorted(out_dir.glob("*.png"))
+        check(bool(debug_files), f"render_pictogram_sheet writes a local debug file ({len(debug_files)})")
+        check(
+            any("Datei:" in part.text for part in result.content if part.type == "text"),
+            "render text reports the debug file path",
+        )
 
         result = await client.call_tool(
             "render_pictogram_layout",

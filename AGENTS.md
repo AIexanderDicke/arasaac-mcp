@@ -74,6 +74,10 @@ free of pi/agent specifics and keep LLM logic out of the core.
   Override with `ARASAAC_FONT=/path/to/font.ttf` if ever needed.
 - `icons/`, `.venv/`, `output/`, `__pycache__/` are gitignored. Keep it that way
   (icons are 338 MB; committing them would be a mistake).
+- The MCP server writes every rendered sheet to `output/` for local debugging
+  (`ARASAAC_OUTPUT_DIR`, `--output-dir`, `--no-save`). That local file is a
+  convenience only — the image travels in the tool result; a server path is
+  meaningless to a remote client.
 
 ## Common tasks
 
