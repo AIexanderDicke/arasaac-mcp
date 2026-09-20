@@ -12,7 +12,7 @@ or a request — into an **ordered ARASAAC pictogram sequence** and renders it a
 an image/PDF, so people with limited reading or language comprehension —
 especially children in special education — can understand it.
 
-- Idea and background: [`CONCEPT.md`](CONCEPT.md) (see §8 for the roadmap).
+- Idea, background and roadmap: [`docs/`](docs/) (one design note per topic).
 - Model rules (the "spec" of the representation): [`scripts/prompt.md`](scripts/prompt.md).
 - User-facing overview: [`README.md`](README.md).
 
@@ -61,7 +61,7 @@ core.
 | `assets/fonts/NotoSans-*.ttf` | Umlaut-capable fonts for captions |
 | `icons/` | **PNGs gitignored**, ~338 MB, 13,828 × `[id]_[description].png`; `metadata_de.json` (the ~9 MB word index) **is tracked** |
 | `output/` | **gitignored**, generated sheets |
-| `scripts/prompt.md`, `CONCEPT.md`, `README.md` | Docs |
+| `scripts/prompt.md`, `README.md`, `docs/` | Docs |
 | `examples/` | Sample layout JSON: `stundenplan.json` (grid), `karten.json` (cards + arrow) |
 
 ## Setup
@@ -455,7 +455,7 @@ render_layout_and_save(
 - Never emit a misleading icon; verify ambiguous candidates with
   `view_pictogram` (see `scripts/prompt.md` for known traps: `verbleiben`, `vor`).
 - Aim ≤ 5 pictograms, hard cap ~8.
-- Keep this file and `README.md`/`CONCEPT.md` in sync when the architecture
+- Keep this file, `README.md` and `docs/` in sync when the architecture
   changes.
 
 ## Licensing & secrets
