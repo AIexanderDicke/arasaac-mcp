@@ -21,13 +21,13 @@ especially children in special education — can understand it.
 ```
 one front-end, one core:
 
-MCP host (Claude, IDE, …) ─▶ arasaac-mcp (src/arasaac_pictograms/mcp.py)
+MCP host (Claude, IDE, …) ─▶ arasaac-mcp (arasaac_mcp/mcp/)
                                         │ 4 word-based tools
                                         ▼
-                     src/arasaac_pictograms/catalog.py   (word → file)
+                     arasaac_mcp/catalog.py   (word → file)
                                         │
                                         ▼
-              layout.py (Pillow) + assets/fonts/   ← src/arasaac_pictograms/cli.py
+              layout.py (Pillow) + assets/fonts/   ← arasaac_mcp/cli.py
                                         │
                                         ▼
         output/sheet_<epoch>.png  ·  MCP image content  ·  scripts/prompt.md + skills/
@@ -41,16 +41,16 @@ core.
 
 | Path | Role |
 | --- | --- |
-| `src/arasaac_pictograms/layout.py` | Pillow renderer: strip layout **and** the free layout engine (`render_layout`: grid/table, cards, canvas, arrows), colour frames, text, PNG/JPG/PDF export |
-| `src/arasaac_pictograms/cli.py` | `make-sheet` CLI (entry point) |
-| `src/arasaac_pictograms/catalog.py` | Word-based search/resolve (`Catalog`, `get_catalog`): the word→pictogram mapping underneath the tools |
-| `src/arasaac_pictograms/mcp.py` | `arasaac-mcp` MCP server: 4 tools + prompt + resources (optional extra `mcp`) |
-| `src/arasaac_pictograms/skill.py` | Locates/reads the generated Agent Skill for the MCP prompt/resource |
+| `arasaac_mcp/layout.py` | Pillow renderer: strip layout **and** the free layout engine (`render_layout`: grid/table, cards, canvas, arrows), colour frames, text, PNG/JPG/PDF export |
+| `arasaac_mcp/cli.py` | `make-sheet` CLI (entry point) |
+| `arasaac_mcp/catalog.py` | Word-based search/resolve (`Catalog`, `get_catalog`): the word→pictogram mapping underneath the tools |
+| `arasaac_mcp/mcp/` | `arasaac-mcp` MCP server **package**: one file per tool (`search_pictograms.py`, `view_pictogram.py`, `render_pictogram_sheet.py`, `render_pictogram_layout.py`) plus `server.py` (builds the server), `context.py` (catalog + output dir), `media.py` (image/URL results), `resources.py` (prompt + skill), `routes.py` (`GET /sheet/<name>`) |
+| `arasaac_mcp/skill.py` | Locates/reads the generated Agent Skill for the MCP prompt/resource |
 | `scripts/build_skill.py` | Generates `skills/` from `scripts/prompt.md` (`--check` for drift) |
 | `scripts/test_mcp.py` | Offline catalog + MCP tests (in-memory client, no LLM) |
 | `scripts/mcp_up.sh` | Start/restart relay + MCP server in tmux without killing the VS Code forwarded port |
 | `scripts/port_relay.py` | Stable TCP relay in front of the MCP server (keeps the forwarded port bound) |
-| `skills/arasaac-pictograms/` | **generated** Agent Skill (SKILL.md + `references/`); do not edit by hand |
+| `skills/arasaac/` | **generated** Agent Skill (SKILL.md + `references/`); do not edit by hand |
 | `Dockerfile`, `docker-compose.yml`, `.dockerignore` | Self-contained image (code + fonts + 338 MB icons), no API key |
 | `examples/mcp.json` | MCP host config template (stdio) |
 | `scripts/download_icons.py` | Downloads the pictograms + `metadata_de.json` (stdlib only) |
@@ -62,14 +62,16 @@ core.
 
 ## Setup
 
-- Python **3.13**, dependencies managed by **uv**. Core dependency: **Pillow**.
-  The MCP server is an optional extra (FastMCP).
+- Python **3.13**, dependencies managed by **uv**. Core dependencies: **Pillow**
+  (renderer) and **FastMCP** (the MCP server).
+- The importable package is **`arasaac_mcp/`** at the repo root (flat layout, no
+  `src/`); the distribution is `arasaac-mcp` and `uv_build` is configured with
+  `module-root = ""`.
 - Run Python via `uv run …`. **Never `source .venv/bin/activate`** — `uv run`
   provisions the environment itself, and the tools shell out to it.
 
 ```bash
-uv sync                          # install deps (Pillow)
-uv sync --extra mcp              # + the MCP server (fastmcp)
+uv sync                          # install deps (Pillow + fastmcp)
 ```
 
 - **Icons are not in git** (`icons/`, ~338 MB). Fetch them once (stdlib only,
@@ -172,9 +174,9 @@ The host brings the model; the server runs **no LLM** and needs **no API key** �
 it only searches, shows and renders pictograms.
 
 ```bash
-uv run --extra mcp arasaac-mcp                    # stdio (default)
-uv run --extra mcp arasaac-mcp --transport http   # streamable HTTP on /mcp
-uv run --extra mcp python scripts/test_mcp.py     # offline tests, no LLM
+uv run arasaac-mcp                    # stdio (default)
+uv run arasaac-mcp --transport http   # streamable HTTP on /mcp
+uv run python scripts/test_mcp.py     # offline tests, no LLM
 ```
 
 | Surface | Name | Purpose |
@@ -202,9 +204,9 @@ entry (Claude Desktop, Claude Code, …) looks like
 ```json
 {
   "mcpServers": {
-    "arasaac-pictograms": {
+    "arasaac-mcp": {
       "command": "uv",
-      "args": ["run", "--extra", "mcp", "arasaac-mcp"],
+      "args": ["run", "arasaac-mcp"],
       "cwd": "/path/to/arasaac",
       "env": { "ARASAAC_ICONS_DIR": "/path/to/arasaac/icons" }
     }
@@ -231,7 +233,7 @@ Both run in tmux (`arasaac-relay`, `arasaac-mcp`); logs in
 
 ### Skill generation
 
-`skills/arasaac-pictograms/` (SKILL.md + on-demand `references/`) is generated
+`skills/arasaac/` (SKILL.md + on-demand `references/`) is generated
 from `scripts/prompt.md` — the single source of truth:
 
 ```bash
@@ -259,7 +261,7 @@ rebuilds do not re-copy them.
 ### Library
 
 ```python
-from arasaac_pictograms import Entry, SheetOptions, render_and_save, render_layout_and_save
+from arasaac_mcp import Entry, SheetOptions, render_and_save, render_layout_and_save
 
 render_and_save(
     [Entry("icons/3123_Regen.png", role="NOUN"), "36081_alle.png"],
@@ -314,15 +316,15 @@ render_layout_and_save(
   `layout` key and calls `render_layout_and_save`).
 
 ### Word logic lives in Python
-- The word contract is implemented in `src/arasaac_pictograms/catalog.py`.
+- The word contract is implemented in `arasaac_mcp/catalog.py`.
   When you change search/resolve/label logic, run the offline test
-  (`uv run --extra mcp python scripts/test_mcp.py`).
+  (`uv run python scripts/test_mcp.py`).
 - `catalog.py` is Pillow-free and holds only the word→pictogram mapping; the MCP
-  server (`mcp.py`) does the rendering. Keep LLM logic out of both — the MCP
+  server (`mcp/`) does the rendering. Keep LLM logic out of both — the MCP
   server runs **no** model; the host brings it.
 
 ### The skill is generated, not hand-written
-- `skills/arasaac-pictograms/` is generated from `scripts/prompt.md` by
+- `skills/arasaac/` is generated from `scripts/prompt.md` by
   `scripts/build_skill.py`. Never edit the generated files by hand; edit
   `scripts/prompt.md` and re-run the generator. `--check` fails on drift.
 - `scripts/prompt.md` is the single source: the MCP prompt/resource serve the generated

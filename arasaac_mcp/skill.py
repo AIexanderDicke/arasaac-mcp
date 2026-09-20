@@ -1,4 +1,4 @@
-"""Locate and read the ``arasaac-pictograms`` Agent Skill.
+"""Locate and read the ``arasaac`` Agent Skill.
 
 The skill files are generated from ``scripts/prompt.md`` by ``scripts/build_skill.py``.
 The MCP server reuses them as its prompt and resource, so the recipe has exactly
@@ -10,8 +10,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-SKILL_NAME = "arasaac-pictograms"
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+SKILL_NAME = "arasaac"
+_REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def skill_dir() -> Path | None:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Generate the ``arasaac-pictograms`` Agent Skill from ``scripts/prompt.md``.
+"""Generate the ``arasaac`` Agent Skill from ``scripts/prompt.md``.
 
 ``scripts/prompt.md`` is the single source of truth for the transcriber rules.
 This script splits it into a short, always-loaded ``SKILL.md`` plus on-demand
@@ -8,7 +8,7 @@ harness that understands the Agent Skills standard (Claude, IDEs, …) without
 duplicating them by hand.
 
 Usage:
-    python scripts/build_skill.py           # (re)write skills/arasaac-pictograms
+    python scripts/build_skill.py           # (re)write skills/arasaac
     python scripts/build_skill.py --check   # fail if the generated files are stale
 """
 
@@ -21,9 +21,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "scripts" / "prompt.md"
-SKILL_DIR = ROOT / "skills" / "arasaac-pictograms"
+SKILL_DIR = ROOT / "skills" / "arasaac"
 
-SKILL_NAME = "arasaac-pictograms"
+SKILL_NAME = "arasaac"
 SKILL_DESCRIPTION = (
     "Turn German text (a sentence, situation, rule, routine, request or a structured "
     "timetable) into an ordered ARASAAC pictogram sequence or free layout that is "

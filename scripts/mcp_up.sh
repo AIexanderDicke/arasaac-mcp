@@ -30,13 +30,13 @@ fi
 
 if ! tmux has-session -t "$MCP_SESSION" 2>/dev/null; then
   tmux new-session -d -s "$MCP_SESSION" \
-    "uv run --extra mcp arasaac-mcp --transport http --host $HOST --port $INTERNAL \
+    "uv run arasaac-mcp --transport http --host $HOST --port $INTERNAL \
      > /tmp/arasaac-mcp.log 2>&1"
   echo "started server: $HOST:$INTERNAL"
 fi
 
 sleep 8
-if uv run --extra mcp python - "$PORT" <<'PY'
+if uv run python - "$PORT" <<'PY'
 import asyncio, sys
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client

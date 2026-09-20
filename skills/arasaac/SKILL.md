@@ -1,5 +1,5 @@
 ---
-name: arasaac-pictograms
+name: arasaac
 description: Turn German text (a sentence, situation, rule, routine, request or a structured timetable) into an ordered ARASAAC pictogram sequence or free layout that is understandable from the pictures alone, and render it as an image. Use when the user wants a pictogram strip, AAC symbols, a visual schedule or timetable, or an easy-to-understand picture version of German text.
 allowed-tools: search_pictograms view_pictogram render_pictogram_sheet render_pictogram_layout
 ---

@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "arasaac-pictograms": {
+    "arasaac-mcp": {
       "command": "uv",
-      "args": ["run", "--extra", "mcp", "arasaac-mcp"],
+      "args": ["run", "arasaac-mcp"],
       "cwd": "/path/to/arasaac",
       "env": {
         "ARASAAC_ICONS_DIR": "/path/to/arasaac/icons"

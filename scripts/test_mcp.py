@@ -6,7 +6,7 @@ real rendering — against the Python core and the MCP server (in-memory, no
 network).
 
 Run from the repo root:
-    uv run --extra mcp python scripts/test_mcp.py
+    uv run python scripts/test_mcp.py
 """
 
 from __future__ import annotations
@@ -18,10 +18,10 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT))
 
-from arasaac_pictograms.catalog import get_catalog  # noqa: E402
-from arasaac_pictograms.mcp import create_server  # noqa: E402
+from arasaac_mcp.catalog import get_catalog  # noqa: E402
+from arasaac_mcp.mcp import create_server  # noqa: E402
 
 FAILED = 0
 
@@ -224,7 +224,7 @@ async def exercise() -> None:
         )
 
         resource = await client.read_resource("arasaac://skill")
-        check("name: arasaac-pictograms" in resource[0].text, "skill resource serves SKILL.md")
+        check("name: arasaac" in resource[0].text, "skill resource serves SKILL.md")
 
 
 asyncio.run(exercise())

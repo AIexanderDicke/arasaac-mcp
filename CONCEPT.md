@@ -165,13 +165,13 @@ projektspezifische Tools hat, statt dem Modell freien Shell-Zugriff zu geben.
   - `render_pictogram_sheet` — rendert die gewählte Folge als Bild/PDF
     (der in `layout.py` gebaute Renderer).
 - **MCP-Server + Skill (umgesetzt).** Dieselben vier wortbasierten Tools werden
-  über einen **MCP-Server** (`src/arasaac_pictograms/mcp.py`, Kommando
+  über einen **MCP-Server** (`arasaac_mcp/mcp/`, Kommando
   `arasaac-mcp`) bereitgestellt: `search_pictograms`, `view_pictogram`,
   `render_pictogram_sheet`, `render_pictogram_layout`. Das Modell bringt der
   Host mit — der Server hält keinen API-Key und führt kein LLM aus. Das Regelwerk
   aus `scripts/prompt.md` wird als MCP-**Prompt** (`pictogram_transcriber`) und als MCP-
   **Resource** (`arasaac://skill`, `arasaac://rules`) ausgeliefert und liegt
-  zusätzlich als portabler **Agent Skill** unter `skills/arasaac-pictograms/`
+  zusätzlich als portabler **Agent Skill** unter `skills/arasaac/`
   (SKILL.md + `references/`, per `scripts/build_skill.py` aus `scripts/prompt.md`
   generiert). So kann der Transcriber in verschiedenen MCP-fähigen Hosts
   (Claude Desktop, IDEs, …) laufen; die Wortauflösung liegt in `catalog.py`.
@@ -191,5 +191,8 @@ projektspezifische Tools hat, statt dem Modell freien Shell-Zugriff zu geben.
 
 Referenz-Implementierung:
 
-- `src/arasaac_pictograms/mcp.py` — stellt die vier Tools, den MCP-Prompt und die
-  Resources bereit; die Wortlogik liegt in `catalog.py`.
+- `arasaac_mcp/mcp/` — Paket mit einem Modul pro Tool
+  (`search_pictograms.py`, `view_pictogram.py`, `render_pictogram_sheet.py`,
+  `render_pictogram_layout.py`) sowie `server.py`, `context.py`, `media.py`,
+  `resources.py` (Prompt + Skill) und `routes.py` (`GET /sheet/<name>`). Die
+  Wortlogik liegt in `catalog.py`.

@@ -15,14 +15,14 @@ RUN useradd --create-home --uid 10001 app
 
 # Dependencies only.
 COPY pyproject.toml uv.lock README.md ./
-RUN uv sync --frozen --extra mcp --no-install-project --no-dev
+RUN uv sync --frozen --no-install-project --no-dev
 
 # Project code, fonts, recipe and generated skill.
-COPY --chown=app:app src/ ./src/
+COPY --chown=app:app arasaac_mcp/ ./arasaac_mcp/
 COPY --chown=app:app assets/ ./assets/
 COPY --chown=app:app skills/ ./skills/
 COPY --chown=app:app scripts/prompt.md ./scripts/prompt.md
-RUN uv sync --frozen --extra mcp --no-dev
+RUN uv sync --frozen --no-dev
 
 # Pictograms last: 338 MB and rarely change.
 COPY --chown=app:app icons/ ./icons/

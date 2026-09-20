@@ -41,24 +41,19 @@ wheels = [
 ]
 
 [[package]]
-name = "arasaac-pictograms"
+name = "arasaac-mcp"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "pillow" },
-]
-
-[package.optional-dependencies]
-mcp = [
     { name = "fastmcp" },
+    { name = "pillow" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "fastmcp", marker = "extra == 'mcp'", specifier = ">=2.0" },
+    { name = "fastmcp", specifier = ">=2.0" },
     { name = "pillow", specifier = ">=12.3.0" },
 ]
-provides-extras = ["mcp"]
 
 [[package]]
 name = "attrs"

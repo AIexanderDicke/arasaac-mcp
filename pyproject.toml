@@ -1,5 +1,5 @@
 [project]
-name = "arasaac-pictograms"
+name = "arasaac-mcp"
 version = "0.1.0"
 description = "Turn an ordered list of ARASAAC pictograms into a sentence strip (image/PDF)"
 readme = "README.md"
@@ -9,18 +9,17 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "pillow>=12.3.0",
+    "fastmcp>=2.0",
 ]
 
 [project.scripts]
-arasaac-pictograms = "arasaac_pictograms:main"
-make-sheet = "arasaac_pictograms:main"
-arasaac-mcp = "arasaac_pictograms.mcp:main"
-
-[project.optional-dependencies]
-mcp = [
-    "fastmcp>=2.0",
-]
+arasaac-pictograms = "arasaac_mcp:main"
+make-sheet = "arasaac_mcp:main"
+arasaac-mcp = "arasaac_mcp.mcp:main"
 
 [build-system]
 requires = ["uv_build>=0.12.17,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""

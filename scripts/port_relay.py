@@ -10,11 +10,11 @@ connection, so the real server can be restarted freely.
 Run it in tmux and leave it running:
 
     tmux new -d -s arasaac-relay \
-        "uv run --extra mcp python scripts/port_relay.py > /tmp/arasaac-relay.log 2>&1"
+        "uv run python scripts/port_relay.py > /tmp/arasaac-relay.log 2>&1"
 
 The MCP server should then listen on a different internal port, e.g. 8001:
 
-    uv run --extra mcp arasaac-mcp --transport http --host 127.0.0.1 --port 8001
+    uv run arasaac-mcp --transport http --host 127.0.0.1 --port 8001
 """
 
 from __future__ import annotations
