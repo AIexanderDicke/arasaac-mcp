@@ -160,8 +160,12 @@ Curated `trap`/`note` fields and a warning in `search_lines` and
 
 ### Phase 6 — Multilingual
 
-A language code instead of a fixed `metadata_de.json`; `metadata_<lang>.json` and
-language-specific overrides. `ARASAAC_ICONS_DIR`/`--lang` stay the entry points.
+The full plan now lives in [`multilingual.md`](multilingual.md) (decisions,
+phases, per-language invariants). Phases 1–5 of this document stay
+prerequisites: richer metadata fields (1), per-language curated descriptions
+(2), per-language stemming (3) and per-language trap marks (5). This phase
+covers only the catalog part: `metadata_<lang>.json` instead of the fixed
+`metadata_de.json`, with a per-request `lang` parameter.
 
 - Files: `arasaac_mcp/catalog.py`, `arasaac_mcp/mcp/context.py`,
   `scripts/download_icons.py`.

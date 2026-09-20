@@ -62,6 +62,7 @@ core.
 | `icons/` | **PNGs gitignored**, ~338 MB, 13,828 × `[id]_[description].png`; `metadata_de.json` (the ~9 MB word index) **is tracked** |
 | `output/` | **gitignored**, generated sheets |
 | `scripts/prompt.md`, `README.md`, `docs/` | Docs |
+| `docs/multilingual.md` | Plan: supporting the 12 well-covered ARASAAC languages (per-request `lang` param, design decisions, phases, per-language invariants) |
 | `examples/` | Sample layout JSON: `stundenplan.json` (grid), `karten.json` (cards + arrow) |
 
 ## Setup
@@ -464,11 +465,41 @@ render_layout_and_save(
   share-alike). The renderer adds an attribution footer by default; keep it.
 - Secrets are environment variables only. Never write API keys to files.
 
-## Git
+## Git workflow (mandatory)
 
-- Branch `feat/mcp-skill` for the MCP + skill work (base commit 177f0a9).
-  `master` and `main` hold the pre-existing history; a remote `origin`
-  (`github.com/AIexanderDicke/arasaac-mcp.git`) now exists — do not push unless
-  asked.
+- **One feature per branch.** Branch off `main` and name it descriptively
+  (e.g. `feat/multilingual-catalog`, `fix/fetch-fallback`).
+- **Prefer many small commits** over one large one. Commit logical steps as you
+  go — each commit should build/pass on its own where feasible.
+- **Conventional Commits are mandatory.** Use the type prefix (with an optional
+  scope): `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`, `perf:`,
+  e.g. `feat(catalog): per-request language parameter`. No other commit-message
+  style.
+- Never commit secrets/keys. Do not update git config or force-push. Only
+  commit, push, or open PRs when explicitly asked.
 - Generated/vendored content is ignored. Before committing, confirm
   `git status --short` shows only intended source/doc changes.
+
+## Engineering workflow (applies to every agent)
+
+1. **Test-driven wherever possible.** Write the failing pytest test first, then
+   the implementation that makes it pass, then refactor. This applies to the
+   Python codebase as a whole (`arasaac_mcp/`, `scripts/`). If a change is
+   genuinely hard to test (pure config, glue, or generated docs), say so
+   explicitly rather than silently skipping TDD.
+2. **Use subagents when possible.** Delegate parallelizable or well-isolated
+   work (codebase exploration, research, multi-file mechanical edits,
+   independent test modules) to subagents to keep the main context lean. Once
+   you delegate, don't duplicate that work yourself.
+3. **Structure code into submodules.** Keep files small and focused on one
+   responsibility. In Python this means modules/subpackages (like
+   `arasaac_mcp/mcp/` with one file per tool), not one large file; do not
+   accumulate unrelated logic in a single growing file.
+4. **Run checks regularly, but only the full suite at the end.** While
+   implementing, run the relevant subset (the test for the area you touched,
+   lint/typecheck on the files you changed) via `uv run …` for a tight feedback
+   loop. Run the complete suite once, at the end, before declaring done — the
+   full gate from [Tests, lint and type checks](#tests-lint-and-type-checks):
+   `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy`,
+   `uv run pytest` and `uv run python scripts/build_skill.py --check`. If the
+   full run fails, fix before reporting completion.
