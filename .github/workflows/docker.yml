@@ -14,13 +14,13 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  # Reuse the test workflow (ruff, ruff format, mypy, pytest, skill drift) so an
-  # image is only built after the checks pass.
-  checks:
+  # Reuse the checks workflow (lint, format, types, test) so an image is only
+  # built after they pass.
+  verify:
     uses: ./.github/workflows/tests.yml
 
   build:
-    needs: checks
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

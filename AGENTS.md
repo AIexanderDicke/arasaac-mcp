@@ -97,8 +97,9 @@ uv run python scripts/download_icons.py --lang de --size 500   # writes icons/ +
 
 The offline suite lives in `tests/` (pytest + pytest-asyncio); its synthetic
 icon library means it needs neither the ~338 MB PNG set nor the network. CI
-(`.github/workflows/tests.yml`) runs all of the following, and the Docker
-workflow reuses the same check job before building an image:
+(`.github/workflows/tests.yml`, workflow **Checks**) runs all of the following
+as separate `lint`, `format`, `types` and `test` jobs, and the Docker workflow
+reuses the whole checks workflow before building an image:
 
 ```bash
 uv run pytest                        # tests (coverage: add --cov=arasaac_mcp)
