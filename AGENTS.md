@@ -30,7 +30,7 @@ MCP host (Claude, IDE, …) ─▶ arasaac-mcp (arasaac_mcp/mcp/)
               layout.py (Pillow) + assets/fonts/   ← arasaac_mcp/cli.py
                                         │
                                         ▼
-        output/sheet_<epoch>.png  ·  MCP image content  ·  scripts/prompt.md + skills/
+        output/sheet_<epoch>.png  ·  MCP image content  ·  scripts/prompt.md → skills/ + recipe/
 ```
 
 The MCP server owns the **word contract** and the renderer. `catalog.py` holds the
@@ -45,12 +45,13 @@ core.
 | `arasaac_mcp/cli.py` | `make-sheet` CLI (entry point) |
 | `arasaac_mcp/catalog.py` | Word-based search/resolve (`Catalog`, `get_catalog`): the word→pictogram mapping underneath the tools |
 | `arasaac_mcp/mcp/` | `arasaac-mcp` MCP server **package**: one file per tool (`search_pictograms.py`, `view_pictogram.py`, `render_pictogram_sheet.py`, `render_pictogram_layout.py`) plus `server.py` (builds the server), `context.py` (catalog + output dir), `media.py` (image/URL results), `resources.py` (prompt + skill), `routes.py` (`GET /sheet/<name>`) |
-| `arasaac_mcp/skill.py` | Locates/reads the generated Agent Skill for the MCP prompt/resource |
-| `scripts/build_skill.py` | Generates `skills/` from `scripts/prompt.md` (`--check` for drift) |
+| `arasaac_mcp/skill.py` | Locates the thin Agent Skill and the packaged recipe parts for the MCP prompt/resources |
+| `scripts/build_skill.py` | Generates `skills/` + `arasaac_mcp/recipe/` from `scripts/prompt.md` (`--check` for drift) |
 | `scripts/test_mcp.py` | Offline catalog + MCP tests (in-memory client, no LLM) |
 | `scripts/mcp_up.sh` | Start/restart relay + MCP server in tmux without killing the VS Code forwarded port |
 | `scripts/port_relay.py` | Stable TCP relay in front of the MCP server (keeps the forwarded port bound) |
-| `skills/arasaac/` | **generated** Agent Skill (SKILL.md + `references/`); do not edit by hand |
+| `skills/arasaac/` | **generated** thin Agent Skill (`SKILL.md` only); do not edit by hand |
+| `arasaac_mcp/recipe/` | **generated** recipe parts, served as `arasaac://rules/<part>` resources; do not edit by hand |
 | `Dockerfile`, `docker-compose.yml`, `.dockerignore` | Self-contained image (code + fonts + 338 MB icons), no API key |
 | `examples/mcp.json` | MCP host config template (stdio) |
 | `scripts/download_icons.py` | Downloads the pictograms + `metadata_de.json` (stdlib only) |
@@ -186,8 +187,9 @@ uv run python scripts/test_mcp.py     # offline tests, no LLM
 | tool | `render_pictogram_sheet` | ordered word sequence → strip image |
 | tool | `render_pictogram_layout` | layout tree (grid/cards/canvas) → image |
 | prompt | `pictogram_transcriber` | full recipe + the German text |
-| resource | `arasaac://skill` | the Agent Skill (`SKILL.md`) |
-| resource | `arasaac://rules` | the full recipe (skill + references) |
+| resource | `arasaac://skill` | the Agent Skill (`SKILL.md`, thin entry point) |
+| resource | `arasaac://rules` | the full recipe (`scripts/prompt.md`, all parts in one document) |
+| resource | `arasaac://rules/<part>` | one recipe part on demand (`core`, `workflow`, `design`, `layouts`, `contract`, `sources`) |
 | HTTP | `GET /sheet/<name>` | serves a rendered sheet/icon PNG |
 
 Rendered sheets and viewed icons are saved to `output/` (override with
@@ -233,8 +235,18 @@ Both run in tmux (`arasaac-relay`, `arasaac-mcp`); logs in
 
 ### Skill generation
 
-`skills/arasaac/` (SKILL.md + on-demand `references/`) is generated
-from `scripts/prompt.md` — the single source of truth:
+The skill is deliberately **thin** and the recipe lives in the package:
+
+- `skills/arasaac/SKILL.md` — the Agent Skill proper: frontmatter plus the
+  always-needed core (language §0, word addressing §3) and a map to the
+  recipe resources. Small on purpose, so a skill-using harness loads as
+  little as possible.
+- `arasaac_mcp/recipe/*.md` — the recipe parts the MCP server serves as
+  resources (`arasaac://rules/<part>` for `core`, `workflow`, `design`,
+  `layouts`, `contract`, `sources`; `arasaac://rules` joins everything). They
+  sit inside the package, so an installed wheel keeps serving them.
+
+Both are generated from `scripts/prompt.md` — the single source of truth:
 
 ```bash
 python scripts/build_skill.py           # regenerate after editing scripts/prompt.md
@@ -324,11 +336,14 @@ render_layout_and_save(
   server runs **no** model; the host brings it.
 
 ### The skill is generated, not hand-written
-- `skills/arasaac/` is generated from `scripts/prompt.md` by
-  `scripts/build_skill.py`. Never edit the generated files by hand; edit
-  `scripts/prompt.md` and re-run the generator. `--check` fails on drift.
-- `scripts/prompt.md` is the single source: the MCP prompt/resource serve the generated
-  skill. Keep them identical.
+- `skills/arasaac/SKILL.md` and `arasaac_mcp/recipe/` are generated from
+  `scripts/prompt.md` by `scripts/build_skill.py`. Never edit the generated
+  files by hand; edit `scripts/prompt.md` and re-run the generator. `--check`
+  fails on drift.
+- `scripts/prompt.md` is the single source: `arasaac://rules` serves it
+  verbatim (fallback: the packaged recipe parts, then an embedded summary),
+  `arasaac://rules/<part>` serves the generated parts, and the thin `SKILL.md`
+  points at the parts. Keep the structure in sync when recipe sections change.
 
 ### Image delivery: web preview (no widget, no inline base64)
 - An `image` content block reaches the model but is **not shown to the user** in

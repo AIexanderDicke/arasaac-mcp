@@ -109,9 +109,10 @@ async def exercise() -> None:
         prompts = {prompt.name for prompt in await client.list_prompts()}
         check("pictogram_transcriber" in prompts, "prompt registered")
         resources = {str(resource.uri) for resource in await client.list_resources()}
+        part_uris = {f"arasaac://rules/{stem}" for stem in ("workflow", "design", "layouts", "contract", "sources")}
         check(
-            {"arasaac://skill", "arasaac://rules"} <= resources,
-            "resources registered (no viewer resource any more)",
+            part_uris <= resources,
+            "recipe parts registered as resources (no viewer resource any more)",
         )
         check(
             not any(str(r).startswith("ui://") for r in resources),
@@ -225,6 +226,25 @@ async def exercise() -> None:
 
         resource = await client.read_resource("arasaac://skill")
         check("name: arasaac" in resource[0].text, "skill resource serves SKILL.md")
+        check(
+            "arasaac://rules" in resource[0].text,
+            "skill points at the recipe resources",
+        )
+
+        rules = await client.read_resource("arasaac://rules")
+        check(
+            "## 10. Workflow" in rules[0].text and "Antworte immer auf Deutsch" in rules[0].text,
+            "rules resource serves the full recipe",
+        )
+
+        part = await client.read_resource("arasaac://rules/design")
+        check("## 5. Core principle" in part[0].text, "recipe part resource serves its section")
+
+        changed = await client.read_resource("arasaac://rules/workflow")
+        check(
+            "ask" in changed[0].text and "German" in changed[0].text,
+            "workflow recipe asks for change requests after an artefact",
+        )
 
 
 asyncio.run(exercise())

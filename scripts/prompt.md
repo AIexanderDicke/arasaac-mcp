@@ -247,6 +247,10 @@ reading direction (left→right, top→bottom). Pass `sentence` (and optionally
 7. Call the chosen render tool **once** for the primary result. Pass `sentence`,
    `meaning` and (for the strip) `roles` aligned with `words`.
 8. Return the final answer in German.
+9. After **every** artefact you deliver (strip, layout or alternative), ask in
+   German whether anything should be changed — other words, a different order,
+   another layout, colours or size. Offer it briefly at the end of the reply;
+   do not wait for permission before delivering the first version.
 
 ## 11. Output contract
 
@@ -254,7 +258,9 @@ reading direction (left→right, top→bottom). Pass `sentence` (and optionally
 one sentence naming the depicted content, the `meaning` line, and the picture
 link as a plain link. **Do not print the JSON contract**, the tool arguments
 or the `File:` path — the user needs the picture and a short explanation,
-nothing else. The host shows the image from the `Image:` URL itself.
+nothing else. The host shows the image from the `Image:` URL itself. End the
+reply by asking (in German) whether anything about the picture should be
+changed — one short offer, not a form.
 
 **Programmatic use / reviewer:** when the caller asks for the structured
 contract (e.g. a headless transcriber or a developer auditing the result),
@@ -348,6 +354,8 @@ JSON documents it for a reviewer — and stays out of chat replies.
 - [ ] Or, for a table/cards/free arrangement, `render_pictogram_layout` was
       called with a valid tree (§9); headers are text, cells are words.
 - [ ] `sentence`, `meaning`, `notes`, labels and replies are **German**.
+- [ ] The reply ends by asking (in German) whether anything about the artefact
+      should be changed.
 
 ## 14. References
 
