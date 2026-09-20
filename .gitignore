@@ -12,6 +12,12 @@ wheels/
 # Generated pictogram sheets
 output/
 
+# Test artifacts
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+
 # content directories
 icons/*
 # the word index ships in the repo; the ~338 MB PNG set is fetched on demand
