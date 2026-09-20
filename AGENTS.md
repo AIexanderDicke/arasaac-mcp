@@ -43,7 +43,8 @@ core.
 | --- | --- |
 | `arasaac_mcp/layout.py` | Pillow renderer: strip layout **and** the free layout engine (`render_layout`: grid/table, cards, canvas, arrows), colour frames, text, PNG/JPG/PDF export |
 | `arasaac_mcp/cli.py` | `make-sheet` CLI (entry point) |
-| `arasaac_mcp/catalog.py` | Word-based search/resolve (`Catalog`, `get_catalog`): the word→pictogram mapping underneath the tools |
+| `arasaac_mcp/catalog.py` | Word-based search/resolve (`Catalog`, `get_catalog`): the word→pictogram mapping underneath the tools; builds the whole index from `metadata_de.json` even with no PNGs, and `ensure()`/`path_of()` materialise a pictogram (local file or lazy fetch) |
+| `arasaac_mcp/fetch.py` | On-demand ARASAAC download (stdlib only): one pictogram → cache, atomic write, size fallback |
 | `arasaac_mcp/mcp/` | `arasaac-mcp` MCP server **package**: one file per tool (`search_pictograms.py`, `view_pictogram.py`, `render_pictogram_sheet.py`, `render_pictogram_layout.py`) plus `server.py` (builds the server), `context.py` (catalog + output dir), `media.py` (image/URL results), `resources.py` (prompt + skill), `routes.py` (`GET /sheet/<name>`) |
 | `arasaac_mcp/skill.py` | Locates the thin Agent Skill and the packaged recipe parts for the MCP prompt/resources |
 | `scripts/build_skill.py` | Generates `skills/` + `arasaac_mcp/recipe/` from `scripts/prompt.md` (`--check` for drift) |
@@ -52,7 +53,7 @@ core.
 | `scripts/port_relay.py` | Stable TCP relay in front of the MCP server (keeps the forwarded port bound) |
 | `skills/arasaac/` | **generated** thin Agent Skill (`SKILL.md` only); do not edit by hand |
 | `arasaac_mcp/recipe/` | **generated** recipe parts, served as `arasaac://rules/<part>` resources; do not edit by hand |
-| `Dockerfile`, `docker-compose.yml`, `.dockerignore` | Self-contained image (code + fonts + 338 MB icons), no API key |
+| `Dockerfile`, `docker-compose.yml`, `.dockerignore` | Metadata-only image (code + fonts + `metadata_de.json`); pictograms are fetched on demand, no API key |
 | `examples/mcp.json` | MCP host config template (stdio) |
 | `scripts/download_icons.py` | Downloads the pictograms + `metadata_de.json` (stdlib only) |
 | `assets/fonts/NotoSans-*.ttf` | Umlaut-capable fonts for captions |
@@ -91,7 +92,11 @@ uv run python scripts/download_icons.py --lang de --size 500   # writes icons/ +
 
 | Variable | Used by | Meaning |
 | --- | --- | --- |
-| `ARASAAC_ICONS_DIR` | catalog, MCP | Pictogram directory (default `./icons`, else `../icons`) |
+| `ARASAAC_ICONS_DIR` | catalog, MCP | Pictogram directory (default `./icons`, else `../icons`); needs only `metadata_de.json` if fetching |
+| `ARASAAC_CACHE_DIR` | catalog, MCP | Writable cache for fetched pictograms (default: the icons dir) |
+| `ARASAAC_FETCH` | catalog, MCP | `auto` (default) fetches a missing pictogram live; `off` fails instead (offline) |
+| `ARASAAC_FETCH_SIZE` | catalog, MCP | Icon width to request from ARASAAC (default `500`; falls back to `300`/`2500`) |
+| `ARASAAC_STATIC_URL` | fetch | Override the ARASAAC static server (tests use `file://…`) |
 | `ARASAAC_OUTPUT_DIR` | MCP | Where debug renders are written (default `./output`) |
 | `ARASAAC_PUBLIC_BASE_URL` | MCP | Base URL for image links (default `http://localhost:8000`) |
 | `ARASAAC_TRANSPORT` | MCP | `stdio` (default), `http` or `sse` |
@@ -233,6 +238,18 @@ scripts/mcp_up.sh --force        # restart only the MCP server
 Both run in tmux (`arasaac-relay`, `arasaac-mcp`); logs in
 `/tmp/arasaac-relay.log` and `/tmp/arasaac-mcp.log`.
 
+### Icons: local-first, fetched on demand
+
+`catalog.py` builds the index from `metadata_de.json` alone (it synthesises the
+same `[id]_[description].png` name `scripts/download_icons.py` writes), so the
+full pictogram set no longer has to be present. A word maps to a `Pictogram`
+with a `pic_id`; `Catalog.ensure(pic)` (and `path_of`) returns a local path —
+the cached/bundled file if it exists, otherwise it downloads via
+`arasaac_mcp/fetch.py` into `ARASAAC_CACHE_DIR` and caches it. The MCP render
+and view tools call `ensure` before drawing; `layout.py` stays Pillow-only and
+never touches the network. If fetching is off and the file is missing, callers
+raise `FileNotFoundError` — a missing icon is better than a wrong one.
+
 ### Skill generation
 
 The skill is deliberately **thin** and the recipe lives in the package:
@@ -255,20 +272,24 @@ python scripts/build_skill.py --check   # fail if the skill is stale
 
 ### Docker
 
-The image bundles the code, fonts and the ~338 MB pictogram set, so it runs
-**offline** and needs **no API key**:
+The image ships the code, fonts and only the ~9 MB `metadata_de.json` — **not**
+the ~338 MB pictogram set. A pictogram is downloaded from ARASAAC the first
+time it is rendered and cached in `/app/cache` (a compose volume), so the image
+is small and code-only rebuilds are fast:
 
 ```bash
 docker build -t arasaac-mcp .
-docker run --rm -p 8000:8000 arasaac-mcp --transport http --host 0.0.0.0   # :8000/mcp
-docker run --rm -i arasaac-mcp --transport stdio                            # stdio
-docker compose up --build                                                   # HTTP + output volume
+docker run --rm -p 8000:8000 -v arasaac-cache:/app/cache arasaac-mcp --transport http --host 0.0.0.0   # :8000/mcp
+docker run --rm -i arasaac-mcp --transport stdio                                                        # stdio
+docker compose up --build                                                                               # HTTP + output/cache volumes
 ```
 
 Compose sets transport/host/port via `ARASAAC_TRANSPORT` / `ARASAAC_HOST` /
 `ARASAAC_PORT` (CLI flags override). The container runs unprivileged with a
-writable `output` volume; pictograms sit in their own layer, so code-only
-rebuilds do not re-copy them.
+writable `output` volume and a `cache` volume for fetched pictograms.
+For an **offline / air-gapped** run, set `ARASAAC_FETCH=off` and pre-populate
+the cache (or the icons dir) with the PNGs, e.g. by mounting a checkout of
+`icons/` fetched with `scripts/download_icons.py`.
 
 ### Library
 

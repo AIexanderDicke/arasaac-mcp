@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -20,7 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from arasaac_mcp.catalog import get_catalog  # noqa: E402
+from arasaac_mcp.catalog import Catalog, get_catalog  # noqa: E402
 from arasaac_mcp.mcp import create_server  # noqa: E402
 
 FAILED = 0
@@ -81,6 +82,55 @@ check(
     node["children"][0]["file"].endswith(".png") and node["children"][1]["concept"] == "Berg",
     "layout tree words resolve to files/concepts",
 )
+
+
+# --------------------------------------------------------------------------- #
+# Lazy fetch (metadata-only, no PNGs)
+# --------------------------------------------------------------------------- #
+print("\n== lazy fetch ==")
+
+with tempfile.TemporaryDirectory(prefix="arasaac-lazy-") as tmp_name:
+    tmp = Path(tmp_name)
+    bare_dir = tmp / "icons"
+    bare_dir.mkdir()
+    shutil.copy(ROOT / "icons" / "metadata_de.json", bare_dir / "metadata_de.json")
+
+    # Without local PNGs the catalog still searches and resolves by word ...
+    bare = Catalog(bare_dir)
+    lines = bare.search_lines("Regen", 3)
+    check(bool(lines) and lines[0].startswith("1. Regen"), "metadata-only catalog still searches")
+    pic = bare.resolve("Auto")
+    check(
+        pic.file.endswith(".png") and pic.pic_id is not None,
+        "metadata-only catalog resolves to a fetchable id",
+    )
+
+    # ... but refuses to render until fetching is allowed.
+    try:
+        bare.ensure(pic)
+        check(False, "metadata-only catalog refuses to render without fetching")
+    except FileNotFoundError:
+        check(True, "metadata-only catalog refuses to render without fetching")
+
+    # The label round-trip must survive having no files at all.
+    mismatch = 0
+    for line in bare.search_lines("Auto", 12):
+        label = line.split(". ", 1)[1].split(" — ")[0].strip()
+        if bare.label_of(bare.resolve(label)).lower() != label.lower():
+            mismatch += 1
+    check(mismatch == 0, "metadata-only labels round-trip")
+
+    # Fetching writes into the cache (served over file:// here, so no network).
+    static = tmp / "static"
+    source = static / str(pic.pic_id) / f"{pic.pic_id}_500.png"
+    source.parent.mkdir(parents=True)
+    source.write_bytes((ROOT / "icons" / pic.file).read_bytes())
+    cache = tmp / "cache"
+    lazy = Catalog(bare_dir, cache_dir=cache, fetch_missing=True, static_url=static.as_uri())
+    fetched = lazy.ensure(lazy.resolve("Auto"))
+    check(fetched.is_file() and fetched.parent == cache, "lazy catalog fetches into the cache")
+    check(lazy.path_of("Auto") == fetched, "path_of returns the cached file")
+    check(not (bare_dir / pic.file).exists(), "the bundled icons dir is left untouched")
 
 
 # --------------------------------------------------------------------------- #
@@ -247,7 +297,55 @@ async def exercise() -> None:
         )
 
 
+async def exercise_lazy_fetch() -> None:
+    """The MCP render tools must work with metadata only (icons fetched live)."""
+    import os
+
+    from fastmcp import Client
+
+    full = get_catalog(ROOT / "icons")
+    with tempfile.TemporaryDirectory(prefix="arasaac-mcp-lazy-") as tmp_name:
+        tmp = Path(tmp_name)
+        icons = tmp / "icons"
+        icons.mkdir()
+        shutil.copy(ROOT / "icons" / "metadata_de.json", icons / "metadata_de.json")
+
+        # Stand in for ARASAAC with a file:// tree, so the test needs no network.
+        static = tmp / "static"
+        words = ["Regen", "Auto"]
+        for word in words:
+            pic = full.resolve(word)
+            source = static / str(pic.pic_id) / f"{pic.pic_id}_500.png"
+            source.parent.mkdir(parents=True, exist_ok=True)
+            source.write_bytes((ROOT / "icons" / pic.file).read_bytes())
+
+        cache = tmp / "cache"
+        previous = os.environ.get("ARASAAC_STATIC_URL")
+        os.environ["ARASAAC_STATIC_URL"] = static.as_uri()
+        try:
+            server = create_server(
+                icons, output_dir=tmp / "output", fetch_missing=True, cache_dir=cache
+            )
+            async with Client(server) as client:
+                result = await client.call_tool(
+                    "render_pictogram_sheet", {"words": words, "labels": False}
+                )
+                text = "\n".join(part.text for part in result.content if part.type == "text")
+                url = next(
+                    (line.split()[-1] for line in text.splitlines() if line.startswith("Image: ")),
+                    "",
+                )
+                check(image_url_ok(url), "lazy MCP render fetches and renders metadata-only icons")
+        finally:
+            if previous is None:
+                os.environ.pop("ARASAAC_STATIC_URL", None)
+            else:
+                os.environ["ARASAAC_STATIC_URL"] = previous
+        check((cache / full.resolve("Regen").file).is_file(), "lazy MCP render cached the pictogram")
+
+
 asyncio.run(exercise())
+asyncio.run(exercise_lazy_fetch())
 
 print("\n" + ("SOME CHECKS FAILED" if FAILED else "ALL CHECKS PASSED"))
 sys.exit(1 if FAILED else 0)

@@ -37,7 +37,7 @@ def render_word_sheet(
     for index, word in enumerate(words):
         pic = catalog.resolve(word)
         role = normalized_roles[index] if normalized_roles else None
-        entries.append(Entry(catalog.icons_dir / pic.file, role, catalog.label_of(pic)))
+        entries.append(Entry(catalog.ensure(pic), role, catalog.label_of(pic)))
 
     options = SheetOptions(
         labels=labels,

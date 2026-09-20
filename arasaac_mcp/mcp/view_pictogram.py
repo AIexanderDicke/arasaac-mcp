@@ -22,12 +22,13 @@ def view(catalog: Catalog, word: str, output_dir: Path | None) -> list[Any]:
     hosts that pass images to the model.
     """
     pic = catalog.resolve(word)
+    icon_path = catalog.ensure(pic)
     synonyms = ", ".join(pic.keywords[1:])
     label = catalog.label_of(pic)
     caption = f'Show "{label}"' + (f" (synonyms: {synonyms})" if synonyms else "")
     if output_dir is None:
-        return [text(caption), image_from_path(catalog.icons_dir / pic.file)]
-    path = save_icon(catalog.icons_dir / pic.file, output_dir)
+        return [text(caption), image_from_path(icon_path)]
+    path = save_icon(icon_path, output_dir)
     url = f"{public_base_url()}/sheet/{path.name}"
     return [text(caption), text(f"Image: {url}")]
 

@@ -5,6 +5,7 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=never \
     ARASAAC_ICONS_DIR=/app/icons \
+    ARASAAC_CACHE_DIR=/app/cache \
     ARASAAC_OUTPUT_DIR=/app/output \
     PYTHONUNBUFFERED=1
 
@@ -24,11 +25,13 @@ COPY --chown=app:app skills/ ./skills/
 COPY --chown=app:app scripts/prompt.md ./scripts/prompt.md
 RUN uv sync --frozen --no-dev
 
-# Pictograms last: 338 MB and rarely change.
-COPY --chown=app:app icons/ ./icons/
+# Word index only (~9 MB). The ~338 MB PNG set is *not* baked in: a pictogram
+# is fetched from ARASAAC on first use into the writable cache below (set
+# ARASAAC_FETCH=off and mount a pre-populated /app/cache to run offline).
+COPY --chown=app:app icons/metadata_de.json ./icons/metadata_de.json
 
-# Debug renders served under /sheet/<name>.
-RUN mkdir -p /app/output && chown app:app /app/output
+# Fetched pictograms (cache) and debug renders served under /sheet/<name>.
+RUN mkdir -p /app/output /app/cache && chown app:app /app/output /app/cache
 
 USER app
 

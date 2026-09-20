@@ -15,6 +15,10 @@ them. The same logic is available in three forms:
 - **CLI** (`make-sheet`) — render a strip or layout directly from files or JSON.
 - **Agent Skill** — the transcriber recipe, generated from `scripts/prompt.md`.
 
+The Docker image ships only the ~9 MB word index (`metadata_de.json`), not the
+~338 MB pictogram set: a pictogram is fetched from ARASAAC on first use and
+cached (offline runs can pre-populate the cache and set `ARASAAC_FETCH=off`).
+
 ## Learn more
 
 - [`CONCEPT.md`](CONCEPT.md) — idea, background, AAC research and roadmap.
