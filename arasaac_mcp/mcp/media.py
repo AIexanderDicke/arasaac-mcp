@@ -74,6 +74,6 @@ def render_result(lines: list[str], png: bytes, saved: Path | None) -> "ToolResu
     """
     if saved is not None:
         url = f"{public_base_url()}/sheet/{saved.name}"
-        lines.append(f"Bild: {url}")
+        lines.append(f"Image: {url}")
         return ToolResult(content=[text("\n".join(lines))])
     return ToolResult(content=[text("\n".join(lines)), image_from_bytes(png)])

@@ -24,14 +24,14 @@ def render_word_sheet(
 ) -> ToolResult:
     """Render an ordered list of pictogram words to a strip image."""
     if not words:
-        raise ValueError("words darf nicht leer sein")
+        raise ValueError("words must not be empty")
     if roles is not None and len(roles) != len(words):
-        raise ValueError("roles muss dieselbe Länge wie words haben")
+        raise ValueError("roles must have the same length as words")
     normalized_roles = [role.upper() for role in roles] if roles else None
     if normalized_roles:
         for role in normalized_roles:
             if role not in VALID_ROLES:
-                raise ValueError(f'Ungültige Rolle "{role}" (erwartet: {", ".join(VALID_ROLES)})')
+                raise ValueError(f'Invalid role "{role}" (expected: {", ".join(VALID_ROLES)})')
 
     entries = []
     for index, word in enumerate(words):
@@ -48,10 +48,10 @@ def render_word_sheet(
     )
     image = render_sheet(entries, options, icons_dir=catalog.icons_dir)
     rendered_words = ", ".join(catalog.label_of(catalog.resolve(word)) for word in words)
-    lines = [f"Gerendertes Piktogrammblatt: {rendered_words}"]
+    lines = [f"Rendered pictogram sheet: {rendered_words}"]
     saved = save_png(image, output_dir)
     if saved is not None:
-        lines.append(f"Datei: {saved}")
+        lines.append(f"File: {saved}")
     return render_result(lines, png_bytes(image), saved)
 
 

@@ -123,9 +123,9 @@ async def exercise() -> None:
 
         result = await client.call_tool("view_pictogram", {"word": "Auto"})
         view_text = "\n".join(part.text for part in result.content if part.type == "text")
-        check("Zeige \"Auto\"" in view_text, "view_pictogram reports the label")
+        check('Show "Auto"' in view_text, "view_pictogram reports the label")
         check(
-            image_url_ok(next((l.split()[-1] for l in view_text.splitlines() if l.startswith("Bild: ")), "")),
+            image_url_ok(next((l.split()[-1] for l in view_text.splitlines() if l.startswith("Image: ")), "")),
             "view_pictogram reports the icon URL (no image block dumped as JSON)",
         )
         check(
@@ -142,7 +142,7 @@ async def exercise() -> None:
             },
         )
         text = "\n".join(part.text for part in result.content if part.type == "text")
-        image_url = next((line.split()[-1] for line in text.splitlines() if line.startswith("Bild: ")), "")
+        image_url = next((line.split()[-1] for line in text.splitlines() if line.startswith("Image: ")), "")
         check(
             image_url_ok(image_url),
             "render text reports the image URL (the host previews it)",
@@ -162,7 +162,7 @@ async def exercise() -> None:
             "saved render keeps the base64 blob out of the chat content",
         )
         check(
-            any("Datei:" in part.text for part in result.content if part.type == "text"),
+            any("File:" in part.text for part in result.content if part.type == "text"),
             "render text reports the debug file path",
         )
 
@@ -182,7 +182,7 @@ async def exercise() -> None:
         )
         grid_text = "\n".join(part.text for part in result.content if part.type == "text")
         check(
-            image_url_ok(next((l.split()[-1] for l in grid_text.splitlines() if l.startswith("Bild: ")), "")),
+            image_url_ok(next((l.split()[-1] for l in grid_text.splitlines() if l.startswith("Image: ")), "")),
             "render_pictogram_layout (grid) reports an image URL",
         )
 
@@ -202,7 +202,7 @@ async def exercise() -> None:
         )
         cards_text = "\n".join(part.text for part in result.content if part.type == "text")
         check(
-            image_url_ok(next((l.split()[-1] for l in cards_text.splitlines() if l.startswith("Bild: ")), "")),
+            image_url_ok(next((l.split()[-1] for l in cards_text.splitlines() if l.startswith("Image: ")), "")),
             "render_pictogram_layout (cards + arrow) reports an image URL",
         )
 

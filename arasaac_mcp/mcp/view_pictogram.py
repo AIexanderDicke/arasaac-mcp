@@ -15,7 +15,7 @@ def view(catalog: Catalog, word: str, output_dir: Path | None) -> list[Any]:
     """Return a pictogram (plus its label) identified by word.
 
     With ``output_dir`` set the icon is saved and served under ``/sheet/`` —
-    the result is text-only with a ``Bild:`` URL line.  Hosts like ChatGPT
+    the result is text-only with an ``Image:`` URL line.  Hosts like ChatGPT
     dump image content blocks as raw JSON into the conversation, and strip
     them before the model sees them, so the URL is the useful channel there.
     Without saving (``--no-save``) the image block is returned directly for
@@ -24,12 +24,12 @@ def view(catalog: Catalog, word: str, output_dir: Path | None) -> list[Any]:
     pic = catalog.resolve(word)
     synonyms = ", ".join(pic.keywords[1:])
     label = catalog.label_of(pic)
-    caption = f'Zeige "{label}"' + (f" (Synonyme: {synonyms})" if synonyms else "")
+    caption = f'Show "{label}"' + (f" (synonyms: {synonyms})" if synonyms else "")
     if output_dir is None:
         return [text(caption), image_from_path(catalog.icons_dir / pic.file)]
     path = save_icon(catalog.icons_dir / pic.file, output_dir)
     url = f"{public_base_url()}/sheet/{path.name}"
-    return [text(caption), text(f"Bild: {url}")]
+    return [text(caption), text(f"Image: {url}")]
 
 
 def register(server: "FastMCP", context: ServerContext) -> None:

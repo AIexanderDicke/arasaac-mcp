@@ -293,8 +293,8 @@ class Catalog:
                 best = pic
         if best is None:
             raise KeyError(
-                f"Kein Piktogramm für {word!r} gefunden. "
-                "Suche nach einem einfacheren Wort oder einem Synonym."
+                f"No pictogram found for {word!r}. "
+                "Search for a simpler word or a synonym."
             )
         return best
 
@@ -330,7 +330,7 @@ class Catalog:
                 ],
             }
         if not isinstance(node, dict):
-            raise TypeError(f"Ungültiger Layout-Knoten: {node!r}")
+            raise TypeError(f"Invalid layout node: {node!r}")
 
         out = dict(node)
         if isinstance(out.get("word"), str):
@@ -344,7 +344,7 @@ class Catalog:
             role = str(out["role"]).upper()
             if role not in VALID_ROLES:
                 raise ValueError(
-                    f'Ungültige Rolle "{out["role"]}" (erwartet: {", ".join(VALID_ROLES)})'
+                    f'Invalid role "{out["role"]}" (expected: {", ".join(VALID_ROLES)})'
                 )
             out["role"] = role
         for key in ("children", "items"):

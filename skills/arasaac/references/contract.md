@@ -7,8 +7,8 @@
 **Chat with a user (interactive host):** reply in short, easy German prose —
 one sentence naming the depicted content, the `meaning` line, and the picture
 link as a plain link. **Do not print the JSON contract**, the tool arguments
-or the `Datei:` path — the user needs the picture and a short explanation,
-nothing else. The host shows the image from the `Bild:` URL itself.
+or the `File:` path — the user needs the picture and a short explanation,
+nothing else. The host shows the image from the `Image:` URL itself.
 
 **Programmatic use / reviewer:** when the caller asks for the structured
 contract (e.g. a headless transcriber or a developer auditing the result),
