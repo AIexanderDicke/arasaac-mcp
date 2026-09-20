@@ -10,3 +10,6 @@ __pycache__
 Dockerfile
 docker-compose.yml
 .dockerignore
+
+# The PNG set is fetched on demand; only metadata_de.json is needed at build.
+icons/*.png

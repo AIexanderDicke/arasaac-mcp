@@ -7,6 +7,11 @@ The catalog reads ``[id]_[description].png`` files plus the optional
 ``metadata_de.json`` shipped alongside them (ARASAAC keywords, tags and
 categories).  Keep this module free of host specifics and of Pillow: it only
 maps words to pictograms.
+
+``metadata_de.json`` is enough to build the whole index: when the matching PNG
+is absent, the catalog synthesises the filename ``download_icons.py`` would have
+written and — if ``fetch_missing`` is on — downloads it on demand into a
+write-through cache (see :mod:`arasaac_mcp.fetch`).
 """
 
 from __future__ import annotations
@@ -17,6 +22,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
+
+from .fetch import PictogramFetchError, fetch_pictogram
 
 #: Roles accepted in layout trees (Fitzgerald key, see ``scripts/prompt.md``).
 VALID_ROLES: tuple[str, ...] = ("PERSON", "NOUN", "VERB", "QUALITY", "SOCIAL", "MISC")
@@ -30,6 +37,7 @@ class Pictogram:
     desc: str
     keywords: tuple[str, ...] = ()
     extra: tuple[str, ...] = ()
+    pic_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -98,16 +106,39 @@ def _score(pic: Pictogram, tokens: Iterable[str]) -> float:
 _INDEX_CACHE: dict[str, list[Pictogram]] = {}
 
 
+def _slug(text: str) -> str:
+    """Filename slug, matching ``scripts/download_icons.py``."""
+    text = re.sub(r"[^\w.-]+", "_", text, flags=re.UNICODE)
+    return text.strip("_")[:60] or "pictogram"
+
+
+def _first_keyword(entry: dict) -> str:
+    for item in entry.get("keywords", []):
+        keyword = str(item.get("keyword", "")).strip()
+        if keyword:
+            return keyword
+    return ""
+
+
+def _synthesize_file(pic_id: int, entry: dict) -> str:
+    """The filename ``download_icons.py`` would have written for ``pic_id``."""
+    keyword = _first_keyword(entry)
+    return f"{pic_id}_{_slug(keyword)}.png" if keyword else f"{pic_id}.png"
+
+
 def _load_index(icons_dir: Path) -> list[Pictogram]:
     key = str(icons_dir)
     cached = _INDEX_CACHE.get(key)
     if cached is not None:
         return cached
 
-    files = sorted(
-        (name for name in os.listdir(icons_dir) if name.endswith(".png")),
-        key=_natural_key,
-    )
+    try:
+        files = sorted(
+            (name for name in os.listdir(icons_dir) if name.endswith(".png")),
+            key=_natural_key,
+        )
+    except FileNotFoundError:
+        files = []
 
     by_id: dict[int, str] = {}
     desc_by_id: dict[int, str] = {}
@@ -126,9 +157,12 @@ def _load_index(icons_dir: Path) -> list[Pictogram]:
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         seen: set[str] = set()
         for entry in metadata:
-            file = by_id.get(entry.get("_id"))
-            if not file:
+            pic_id = entry.get("_id")
+            if pic_id is None:
                 continue
+            # With no local PNG we still index the entry and remember its
+            # filename and ARASAAC id, so a render can fetch it on demand.
+            file = by_id.get(pic_id) or _synthesize_file(pic_id, entry)
             seen.add(file)
             keywords = tuple(
                 str(item.get("keyword", "")).strip()
@@ -138,16 +172,21 @@ def _load_index(icons_dir: Path) -> list[Pictogram]:
             extra = _dedupe(
                 [str(value) for value in [*entry.get("tags", []), *entry.get("categories", [])]]
             )
-            pics.append(Pictogram(file, desc_by_id.get(entry["_id"], ""), keywords, extra))
+            desc = desc_by_id.get(pic_id) or _first_keyword(entry) or Path(file).stem
+            pics.append(Pictogram(file, desc, keywords, extra, pic_id))
         for file in files:
             if file in seen:
                 continue
             match = re.match(r"^(\d+)_(.*)\.png$", file)
-            pics.append(Pictogram(file, match.group(2).replace("_", " ") if match else file))
+            pic_id = int(match.group(1)) if match else None
+            desc = match.group(2).replace("_", " ") if match else file
+            pics.append(Pictogram(file, desc, pic_id=pic_id))
     else:
         for file in files:
             match = re.match(r"^(\d+)_(.*)\.png$", file)
-            pics.append(Pictogram(file, match.group(2).replace("_", " ") if match else file))
+            pic_id = int(match.group(1)) if match else None
+            desc = match.group(2).replace("_", " ") if match else file
+            pics.append(Pictogram(file, desc, pic_id=pic_id))
 
     pics.extend(unindexed)
     _INDEX_CACHE[key] = pics
@@ -167,8 +206,20 @@ def _dedupe(values: Iterable[str]) -> list[str]:
 class Catalog:
     """Word-based view over one icons directory."""
 
-    def __init__(self, icons_dir: Path | str | None = None) -> None:
+    def __init__(
+        self,
+        icons_dir: Path | str | None = None,
+        *,
+        cache_dir: Path | str | None = None,
+        fetch_missing: bool = False,
+        fetch_size: int = 500,
+        static_url: str | None = None,
+    ) -> None:
         self.icons_dir = Path(icons_dir) if icons_dir is not None else default_icons_dir()
+        self.cache_dir = Path(cache_dir) if cache_dir is not None else None
+        self.fetch_missing = fetch_missing
+        self.fetch_size = fetch_size
+        self.static_url = static_url
         self._pics = _load_index(self.icons_dir)
         self._counts: dict[str, int] | None = None
 
@@ -293,21 +344,77 @@ class Catalog:
                 best = pic
         if best is None:
             raise KeyError(
-                f"Kein Piktogramm für {word!r} gefunden. "
-                "Suche nach einem einfacheren Wort oder einem Synonym."
+                f"No pictogram found for {word!r}. "
+                "Search for a simpler word or a synonym."
             )
         return best
 
     def resolve_file(self, word: str) -> Path:
-        """Resolve a word to an absolute file path."""
-        return self.icons_dir / self.resolve(word).file
+        """Resolve a word to a local file path, fetching it if needed."""
+        return self.ensure(self.resolve(word))
+
+    def _search_paths(self, pic: Pictogram) -> list[Path]:
+        """Local locations to look for ``pic``, cache first."""
+        paths: list[Path] = []
+        for base in (self.cache_dir, self.icons_dir):
+            if base is None:
+                continue
+            path = base / pic.file
+            if path not in paths:
+                paths.append(path)
+        return paths
+
+    def ensure(self, pic: Pictogram) -> Path:
+        """Return a local path to ``pic``, downloading it when allowed.
+
+        A local file always wins.  When it is missing and ``fetch_missing`` is
+        on, the PNG is fetched from ARASAAC into ``cache_dir`` (or the icons
+        directory) and cached for the next call.  Otherwise a
+        :class:`FileNotFoundError` is raised — callers never render a
+        placeholder, because a wrong icon is worse than none.
+        """
+        for path in self._search_paths(pic):
+            if path.is_file():
+                return path
+
+        if not self.fetch_missing:
+            raise FileNotFoundError(
+                f"pictogram not available locally: {pic.file} ({self.word_of(pic)}); "
+                "start the server with icon fetching enabled (ARASAAC_FETCH=on)"
+            )
+        if pic.pic_id is None:
+            raise FileNotFoundError(
+                f"pictogram not available locally and has no ARASAAC id: {pic.file}"
+            )
+        target = (self.cache_dir or self.icons_dir) / pic.file
+        try:
+            fetch_pictogram(
+                pic.pic_id,
+                target,
+                size=self.fetch_size,
+                static_url=self.static_url,
+            )
+        except PictogramFetchError as exc:
+            raise FileNotFoundError(
+                f"could not fetch pictogram {pic.file} ({self.word_of(pic)}): {exc}"
+            ) from exc
+        return target
+
+    def path_of(self, word: str) -> Path:
+        """Resolve a word and return a local file, fetching it if needed."""
+        return self.ensure(self.resolve(word))
 
     # -- layout tree -------------------------------------------------------
 
     def icon_node(self, word: str, **extra: object) -> dict:
         """Turn a word into a resolved icon node (word -> file + concept)."""
         pic = self.resolve(word)
-        return {"type": "icon", "file": pic.file, "concept": self.label_of(pic), **extra}
+        return {
+            "type": "icon",
+            "file": str(self.ensure(pic)),
+            "concept": self.label_of(pic),
+            **extra,
+        }
 
     def resolve_layout_node(self, node: object) -> dict | None:
         """Recursively replace ``word`` with ``file``/``concept`` in a layout tree.
@@ -330,13 +437,13 @@ class Catalog:
                 ],
             }
         if not isinstance(node, dict):
-            raise TypeError(f"Ungültiger Layout-Knoten: {node!r}")
+            raise TypeError(f"Invalid layout node: {node!r}")
 
         out = dict(node)
         if isinstance(out.get("word"), str):
             pic = self.resolve(out["word"])
             if out.get("file") is None:
-                out["file"] = pic.file
+                out["file"] = str(self.ensure(pic))
             if out.get("concept") is None and out.get("text") is None:
                 out["concept"] = self.label_of(pic)
             del out["word"]
@@ -344,7 +451,7 @@ class Catalog:
             role = str(out["role"]).upper()
             if role not in VALID_ROLES:
                 raise ValueError(
-                    f'Ungültige Rolle "{out["role"]}" (erwartet: {", ".join(VALID_ROLES)})'
+                    f'Invalid role "{out["role"]}" (expected: {", ".join(VALID_ROLES)})'
                 )
             out["role"] = role
         for key in ("children", "items"):
@@ -378,15 +485,34 @@ class Catalog:
         return out
 
 
-_CATALOG_CACHE: dict[str, Catalog] = {}
+_CATALOG_CACHE: dict[tuple, Catalog] = {}
 
 
-def get_catalog(icons_dir: Path | str | None = None) -> Catalog:
-    """Return a cached :class:`Catalog` for an icons directory."""
+def get_catalog(
+    icons_dir: Path | str | None = None,
+    *,
+    cache_dir: Path | str | None = None,
+    fetch_missing: bool = False,
+    fetch_size: int = 500,
+    static_url: str | None = None,
+) -> Catalog:
+    """Return a cached :class:`Catalog` for an icons directory and fetch policy."""
     resolved = Path(icons_dir) if icons_dir is not None else default_icons_dir()
-    key = str(resolved)
+    key = (
+        str(resolved),
+        str(cache_dir) if cache_dir is not None else None,
+        fetch_missing,
+        fetch_size,
+        static_url,
+    )
     catalog = _CATALOG_CACHE.get(key)
     if catalog is None:
-        catalog = Catalog(resolved)
+        catalog = Catalog(
+            resolved,
+            cache_dir=cache_dir,
+            fetch_missing=fetch_missing,
+            fetch_size=fetch_size,
+            static_url=static_url,
+        )
         _CATALOG_CACHE[key] = catalog
     return catalog

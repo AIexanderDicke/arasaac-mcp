@@ -24,7 +24,7 @@ def render_tree(
 ) -> ToolResult:
     """Render a free layout tree (grid/cards/canvas) of pictogram words."""
     if not isinstance(layout, dict):
-        raise ValueError("layout muss ein Layout-Objekt sein")
+        raise ValueError("layout must be a layout object")
     tree = catalog.resolve_layout_node(layout)
     spec = {"sentence": sentence, "meaning": meaning, "layout": tree}
     options = SheetOptions(
@@ -35,10 +35,10 @@ def render_tree(
         **({"icon_size": icon_size} if icon_size else {}),
     )
     image = render_layout(spec, options, icons_dir=catalog.icons_dir)
-    lines = ["Gerendertes Piktogramm-Layout"]
+    lines = ["Rendered pictogram layout"]
     saved = save_png(image, output_dir)
     if saved is not None:
-        lines.append(f"Datei: {saved}")
+        lines.append(f"File: {saved}")
     return render_result(lines, png_bytes(image), saved)
 
 

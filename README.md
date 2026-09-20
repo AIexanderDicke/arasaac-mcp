@@ -13,6 +13,10 @@ it without reading the words.
 - The MCP server only returns a **link**, which hosts such as the ChatGPT
   Desktop App render as a preview. MCP Apps are not supported right now.
 
+The Docker image ships only the ~9 MB word index (`metadata_de.json`), not the
+~338 MB pictogram set: a pictogram is fetched from ARASAAC on first use and
+cached (offline runs can pre-populate the cache and set `ARASAAC_FETCH=off`).
+
 ## License & attribution
 
 This project uses the pictograms of [ARASAAC](https://arasaac.org) (the Aragonese

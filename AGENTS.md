@@ -30,7 +30,7 @@ MCP host (Claude, IDE, …) ─▶ arasaac-mcp (arasaac_mcp/mcp/)
               layout.py (Pillow) + assets/fonts/   ← arasaac_mcp/cli.py
                                         │
                                         ▼
-        output/sheet_<epoch>.png  ·  MCP image content  ·  scripts/prompt.md + skills/
+        output/sheet_<epoch>.png  ·  MCP image content  ·  scripts/prompt.md → skills/ + recipe/
 ```
 
 The MCP server owns the **word contract** and the renderer. `catalog.py` holds the
@@ -43,19 +43,22 @@ core.
 | --- | --- |
 | `arasaac_mcp/layout.py` | Pillow renderer: strip layout **and** the free layout engine (`render_layout`: grid/table, cards, canvas, arrows), colour frames, text, PNG/JPG/PDF export |
 | `arasaac_mcp/cli.py` | `make-sheet` CLI (entry point) |
-| `arasaac_mcp/catalog.py` | Word-based search/resolve (`Catalog`, `get_catalog`): the word→pictogram mapping underneath the tools |
+| `arasaac_mcp/catalog.py` | Word-based search/resolve (`Catalog`, `get_catalog`): the word→pictogram mapping underneath the tools; builds the whole index from `metadata_de.json` even with no PNGs, and `ensure()`/`path_of()` materialise a pictogram (local file or lazy fetch) |
+| `arasaac_mcp/fetch.py` | On-demand ARASAAC download (stdlib only): one pictogram → cache, atomic write, size fallback |
 | `arasaac_mcp/mcp/` | `arasaac-mcp` MCP server **package**: one file per tool (`search_pictograms.py`, `view_pictogram.py`, `render_pictogram_sheet.py`, `render_pictogram_layout.py`) plus `server.py` (builds the server), `context.py` (catalog + output dir), `media.py` (image/URL results), `resources.py` (prompt + skill), `routes.py` (`GET /sheet/<name>`) |
-| `arasaac_mcp/skill.py` | Locates/reads the generated Agent Skill for the MCP prompt/resource |
-| `scripts/build_skill.py` | Generates `skills/` from `scripts/prompt.md` (`--check` for drift) |
+| `arasaac_mcp/skill.py` | Locates the thin Agent Skill and the packaged recipe parts for the MCP prompt/resources |
+| `scripts/build_skill.py` | Generates `skills/` + `arasaac_mcp/recipe/` from `scripts/prompt.md` (`--check` for drift) |
 | `scripts/test_mcp.py` | Offline catalog + MCP tests (in-memory client, no LLM) |
 | `scripts/mcp_up.sh` | Start/restart relay + MCP server in tmux without killing the VS Code forwarded port |
 | `scripts/port_relay.py` | Stable TCP relay in front of the MCP server (keeps the forwarded port bound) |
-| `skills/arasaac/` | **generated** Agent Skill (SKILL.md + `references/`); do not edit by hand |
-| `Dockerfile`, `docker-compose.yml`, `.dockerignore` | Self-contained image (code + fonts + 338 MB icons), no API key |
+| `skills/arasaac/` | **generated** thin Agent Skill (`SKILL.md` only); do not edit by hand |
+| `arasaac_mcp/recipe/` | **generated** recipe parts, served as `arasaac://rules/<part>` resources; do not edit by hand |
+| `Dockerfile`, `docker-compose.yml`, `.dockerignore` | Metadata-only image (code + fonts + `metadata_de.json`); pictograms are fetched on demand, no API key |
+| `.github/workflows/docker.yml` | CI: builds the metadata-only image, smoke-tests it, and publishes it to GHCR; never downloads the pictogram set |
 | `examples/mcp.json` | MCP host config template (stdio) |
 | `scripts/download_icons.py` | Downloads the pictograms + `metadata_de.json` (stdlib only) |
 | `assets/fonts/NotoSans-*.ttf` | Umlaut-capable fonts for captions |
-| `icons/` | **gitignored**, ~338 MB, 13,828 × `[id]_[description].png` + `metadata_de.json` |
+| `icons/` | **PNGs gitignored**, ~338 MB, 13,828 × `[id]_[description].png`; `metadata_de.json` (the ~9 MB word index) **is tracked** |
 | `output/` | **gitignored**, generated sheets |
 | `scripts/prompt.md`, `CONCEPT.md`, `README.md` | Docs |
 | `examples/` | Sample layout JSON: `stundenplan.json` (grid), `karten.json` (cards + arrow) |
@@ -74,7 +77,9 @@ core.
 uv sync                          # install deps (Pillow + fastmcp)
 ```
 
-- **Icons are not in git** (`icons/`, ~338 MB). Fetch them once (stdlib only,
+- **The PNGs are not in git** (`icons/*.png`, ~338 MB); only the word index
+  (`icons/metadata_de.json`, ~9 MB) is tracked, so the image builds without a
+  download. Fetch the PNGs once for a fully local/offline setup (stdlib only,
   no deps needed):
 
 ```bash
@@ -83,14 +88,19 @@ uv run python scripts/download_icons.py --lang de --size 500   # writes icons/ +
 
 - There are **no system fonts** in the container and Pillow's bundled default
   (Aileron) does **not** render `ä ö ü ß`. The repo bundles Noto Sans; keep it.
-- `icons/`, `.venv/`, `output/`, `__pycache__/` are gitignored. Keep it that way
-  (icons are 338 MB; committing them would be a mistake).
+- `icons/*.png`, `.venv/`, `output/`, `__pycache__/` are gitignored. Keep it
+  that way (the PNGs are 338 MB; committing them would be a mistake).
+  `icons/metadata_de.json` is deliberately **not** ignored.
 
 ### Environment variables
 
 | Variable | Used by | Meaning |
 | --- | --- | --- |
-| `ARASAAC_ICONS_DIR` | catalog, MCP | Pictogram directory (default `./icons`, else `../icons`) |
+| `ARASAAC_ICONS_DIR` | catalog, MCP | Pictogram directory (default `./icons`, else `../icons`); needs only `metadata_de.json` if fetching |
+| `ARASAAC_CACHE_DIR` | catalog, MCP | Writable cache for fetched pictograms (default: the icons dir) |
+| `ARASAAC_FETCH` | catalog, MCP | `auto` (default) fetches a missing pictogram live; `off` fails instead (offline) |
+| `ARASAAC_FETCH_SIZE` | catalog, MCP | Icon width to request from ARASAAC (default `500`; falls back to `300`/`2500`) |
+| `ARASAAC_STATIC_URL` | fetch | Override the ARASAAC static server (tests use `file://…`) |
 | `ARASAAC_OUTPUT_DIR` | MCP | Where debug renders are written (default `./output`) |
 | `ARASAAC_PUBLIC_BASE_URL` | MCP | Base URL for image links (default `http://localhost:8000`) |
 | `ARASAAC_TRANSPORT` | MCP | `stdio` (default), `http` or `sse` |
@@ -186,8 +196,9 @@ uv run python scripts/test_mcp.py     # offline tests, no LLM
 | tool | `render_pictogram_sheet` | ordered word sequence → strip image |
 | tool | `render_pictogram_layout` | layout tree (grid/cards/canvas) → image |
 | prompt | `pictogram_transcriber` | full recipe + the German text |
-| resource | `arasaac://skill` | the Agent Skill (`SKILL.md`) |
-| resource | `arasaac://rules` | the full recipe (skill + references) |
+| resource | `arasaac://skill` | the Agent Skill (`SKILL.md`, thin entry point) |
+| resource | `arasaac://rules` | the full recipe (`scripts/prompt.md`, all parts in one document) |
+| resource | `arasaac://rules/<part>` | one recipe part on demand (`core`, `workflow`, `design`, `layouts`, `contract`, `sources`) |
 | HTTP | `GET /sheet/<name>` | serves a rendered sheet/icon PNG |
 
 Rendered sheets and viewed icons are saved to `output/` (override with
@@ -231,10 +242,32 @@ scripts/mcp_up.sh --force        # restart only the MCP server
 Both run in tmux (`arasaac-relay`, `arasaac-mcp`); logs in
 `/tmp/arasaac-relay.log` and `/tmp/arasaac-mcp.log`.
 
+### Icons: local-first, fetched on demand
+
+`catalog.py` builds the index from `metadata_de.json` alone (it synthesises the
+same `[id]_[description].png` name `scripts/download_icons.py` writes), so the
+full pictogram set no longer has to be present. A word maps to a `Pictogram`
+with a `pic_id`; `Catalog.ensure(pic)` (and `path_of`) returns a local path —
+the cached/bundled file if it exists, otherwise it downloads via
+`arasaac_mcp/fetch.py` into `ARASAAC_CACHE_DIR` and caches it. The MCP render
+and view tools call `ensure` before drawing; `layout.py` stays Pillow-only and
+never touches the network. If fetching is off and the file is missing, callers
+raise `FileNotFoundError` — a missing icon is better than a wrong one.
+
 ### Skill generation
 
-`skills/arasaac/` (SKILL.md + on-demand `references/`) is generated
-from `scripts/prompt.md` — the single source of truth:
+The skill is deliberately **thin** and the recipe lives in the package:
+
+- `skills/arasaac/SKILL.md` — the Agent Skill proper: frontmatter plus the
+  always-needed core (language §0, word addressing §3) and a map to the
+  recipe resources. Small on purpose, so a skill-using harness loads as
+  little as possible.
+- `arasaac_mcp/recipe/*.md` — the recipe parts the MCP server serves as
+  resources (`arasaac://rules/<part>` for `core`, `workflow`, `design`,
+  `layouts`, `contract`, `sources`; `arasaac://rules` joins everything). They
+  sit inside the package, so an installed wheel keeps serving them.
+
+Both are generated from `scripts/prompt.md` — the single source of truth:
 
 ```bash
 python scripts/build_skill.py           # regenerate after editing scripts/prompt.md
@@ -243,20 +276,36 @@ python scripts/build_skill.py --check   # fail if the skill is stale
 
 ### Docker
 
-The image bundles the code, fonts and the ~338 MB pictogram set, so it runs
-**offline** and needs **no API key**:
+The image ships the code, fonts and only the ~9 MB `metadata_de.json` — **not**
+the ~338 MB pictogram set. A pictogram is downloaded from ARASAAC the first
+time it is rendered and cached in `/app/cache` (a compose volume), so the image
+is small and code-only rebuilds are fast:
 
 ```bash
 docker build -t arasaac-mcp .
-docker run --rm -p 8000:8000 arasaac-mcp --transport http --host 0.0.0.0   # :8000/mcp
-docker run --rm -i arasaac-mcp --transport stdio                            # stdio
-docker compose up --build                                                   # HTTP + output volume
+docker run --rm -p 8000:8000 -v arasaac-cache:/app/cache arasaac-mcp --transport http --host 0.0.0.0   # :8000/mcp
+docker run --rm -i arasaac-mcp --transport stdio                                                        # stdio
+docker compose up --build                                                                               # HTTP + output/cache volumes
+```
+
+CI publishes the same image to GHCR on every non-PR push: tag = the branch name
+(sanitised), plus `latest` on `main` and semver tags on `v*`. The repository is
+private, so pulling needs a token with the `read:packages` scope:
+
+```bash
+echo "$GH_TOKEN" | docker login ghcr.io -u <owner> --password-stdin
+docker pull ghcr.io/aiexanderdicke/arasaac-mcp:main
+docker run --rm -p 8000:8000 -v arasaac-cache:/app/cache \
+  -e ARASAAC_TRANSPORT=http -e ARASAAC_HOST=0.0.0.0 \
+  ghcr.io/aiexanderdicke/arasaac-mcp:main
 ```
 
 Compose sets transport/host/port via `ARASAAC_TRANSPORT` / `ARASAAC_HOST` /
 `ARASAAC_PORT` (CLI flags override). The container runs unprivileged with a
-writable `output` volume; pictograms sit in their own layer, so code-only
-rebuilds do not re-copy them.
+writable `output` volume and a `cache` volume for fetched pictograms.
+For an **offline / air-gapped** run, set `ARASAAC_FETCH=off` and pre-populate
+the cache (or the icons dir) with the PNGs, e.g. by mounting a checkout of
+`icons/` fetched with `scripts/download_icons.py`.
 
 ### Library
 
@@ -324,11 +373,14 @@ render_layout_and_save(
   server runs **no** model; the host brings it.
 
 ### The skill is generated, not hand-written
-- `skills/arasaac/` is generated from `scripts/prompt.md` by
-  `scripts/build_skill.py`. Never edit the generated files by hand; edit
-  `scripts/prompt.md` and re-run the generator. `--check` fails on drift.
-- `scripts/prompt.md` is the single source: the MCP prompt/resource serve the generated
-  skill. Keep them identical.
+- `skills/arasaac/SKILL.md` and `arasaac_mcp/recipe/` are generated from
+  `scripts/prompt.md` by `scripts/build_skill.py`. Never edit the generated
+  files by hand; edit `scripts/prompt.md` and re-run the generator. `--check`
+  fails on drift.
+- `scripts/prompt.md` is the single source: `arasaac://rules` serves it
+  verbatim (fallback: the packaged recipe parts, then an embedded summary),
+  `arasaac://rules/<part>` serves the generated parts, and the thin `SKILL.md`
+  points at the parts. Keep the structure in sync when recipe sections change.
 
 ### Image delivery: web preview (no widget, no inline base64)
 - An `image` content block reaches the model but is **not shown to the user** in

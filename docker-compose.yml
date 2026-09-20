@@ -9,9 +9,13 @@ services:
       ARASAAC_HOST: 0.0.0.0
       ARASAAC_PORT: "8000"
       ARASAAC_PUBLIC_BASE_URL: ${ARASAAC_PUBLIC_BASE_URL:-http://localhost:8000}
+      # auto (default) fetches missing pictograms from ARASAAC; off is offline.
+      ARASAAC_FETCH: ${ARASAAC_FETCH:-auto}
     volumes:
       - arasaac-output:/app/output
+      - arasaac-cache:/app/cache
     restart: unless-stopped
 
 volumes:
   arasaac-output:
+  arasaac-cache:

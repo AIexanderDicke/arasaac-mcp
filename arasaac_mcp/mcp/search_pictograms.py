@@ -10,14 +10,14 @@ from .context import ServerContext
 def search(catalog: Catalog, query: str, limit: int = 25) -> str:
     """Search the pictogram library and return word-only result lines."""
     if not query.strip():
-        return "Leere Suchanfrage."
+        return "Empty search query."
     lines = catalog.search_lines(query, limit)
     if not lines:
         return (
-            f'Keine Piktogramme zu "{query}" gefunden. '
-            "Probiere ein Synonym oder ein einfacheres Substantiv."
+            f'No pictograms found for "{query}". '
+            "Try a synonym or a simpler noun."
         )
-    return f'Gefunden: {len(lines)} Treffer für "{query}":\n' + "\n".join(lines)
+    return f'Found: {len(lines)} matches for "{query}":\n' + "\n".join(lines)
 
 
 def register(server: "FastMCP", context: ServerContext) -> None:

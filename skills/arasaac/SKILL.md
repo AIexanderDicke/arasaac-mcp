@@ -8,18 +8,23 @@ allowed-tools: search_pictograms view_pictogram render_pictogram_sheet render_pi
 
 # Pictogram representation (German input → ARASAAC pictograms)
 
-This skill turns German text into ARASAAC pictograms. The section numbers below
-match `scripts/prompt.md`; sections listed in the reference map are loaded from the
-`references/` directory on demand.
+This skill turns German text into ARASAAC pictograms. It is deliberately
+thin: the full recipe is served by the connected MCP server (the one that
+provides the pictogram tools) as resources — read `arasaac://rules`
+(everything at once) or the individual parts in the map below; the
+`pictogram_transcriber` prompt embeds the recipe together with the German
+text. Read the resources on that same server, whatever it is called in
+your host.
 
-## Reference map
+## Recipe resources
 
-| Need | Read |
+| Need | Resource |
 | --- | --- |
-| Design, reduction, icon selection, ordering | [references/design.md](references/design.md) |
-| Layouts (strips, timetables, cards) | [references/layouts.md](references/layouts.md) |
-| Output contract and worked examples | [references/contract.md](references/contract.md) |
-| Sources and further reading | [references/references.md](references/references.md) |
+| Tools, workflow, checklist | `arasaac://rules/workflow` |
+| Design, reduction, icon selection, ordering | `arasaac://rules/design` |
+| Layouts (strips, timetables, cards) | `arasaac://rules/layouts` |
+| Output contract and worked examples | `arasaac://rules/contract` |
+| Sources and further reading | `arasaac://rules/sources` |
 
 ## 0. Language: always German
 
@@ -40,53 +45,3 @@ tools resolve words to images internally.
 - A result may list **synonyms**; you may use any of them as the word, which
   helps when a word is ambiguous.
 - Never invent a word. Every word you use must have appeared in a search result.
-
-## 4. Tools you have
-
-You have exactly four tools. Use only these.
-
-1. **`search_pictograms({ query, limit? })`** — search words plus the official
-   ARASAAC metadata (synonyms, tags, categories). Call it separately per
-   concept and try synonyms. Example: `search_pictograms({ query: "Auto" })`
-   also surfaces `PKW`, `KFZ`.
-2. **`view_pictogram({ word })`** — return the image for a word. Use it for
-   ambiguous or surprising candidates before you select them.
-3. **`render_pictogram_sheet({ words, roles?, sentence?, meaning?, labels?,
-   columns?, icon_size? })`** — render the chosen word sequence to a **strip**
-   (one line, wrapping into rows) and return it. Call it once for the
-   **primary** sequence before finishing.
-4. **`render_pictogram_layout({ layout, sentence?, meaning?, page_size?,
-   labels?, icon_size? })`** — render a **free arrangement** (table/timetable,
-   cards, connector arrows, absolute positions). See §9. Use it instead of the
-   strip whenever the pictograms are not one straight sequence.
-
-## 10. Workflow
-
-1. Understand the input; write down the goal and the core message.
-2. Extract the concepts with their roles.
-3. For each concept call `search_pictograms`; try a synonym if the first search
-   is weak.
-4. Call `view_pictogram` on words that are ambiguous, abstract, or that you are
-   about to reuse across variants.
-5. Choose a primary sequence (≤ 8 words). Optionally sketch up to two
-   meaningfully different alternatives.
-6. Decide the **layout**: one straight sequence → `render_pictogram_sheet`;
-   a timetable, comparison or card sheet → `render_pictogram_layout` (§9).
-7. Call the chosen render tool **once** for the primary result. Pass `sentence`,
-   `meaning` and (for the strip) `roles` aligned with `words`.
-8. Return the final answer in German.
-
-## 13. Checklist before returning
-
-- [ ] The core message is identified (not just the words).
-- [ ] Requests for a depiction were not depicted themselves.
-- [ ] Every word came from a `search_pictograms` result.
-- [ ] The sequence is understandable from the pictures alone.
-- [ ] Concrete icons only; no abstract fallback, no misleading icon.
-- [ ] Function words dropped unless meaningful.
-- [ ] Redundant icons and duplicates removed.
-- [ ] Sequence length ≤ ~8; if longer, split into steps.
-- [ ] `render_pictogram_sheet` was called for the primary sequence.
-- [ ] Or, for a table/cards/free arrangement, `render_pictogram_layout` was
-      called with a valid tree (§9); headers are text, cells are words.
-- [ ] `sentence`, `meaning`, `notes`, labels and replies are **German**.

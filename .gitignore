@@ -13,4 +13,6 @@ wheels/
 output/
 
 # content directories
-icons/
+icons/*
+# the word index ships in the repo; the ~338 MB PNG set is fetched on demand
+!icons/metadata_de.json

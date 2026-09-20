@@ -13,7 +13,13 @@ from pathlib import Path
 
 from ..catalog import default_icons_dir, get_catalog
 from ._deps import FastMCP
-from .context import ServerContext, default_output_dir
+from .context import (
+    ServerContext,
+    default_cache_dir,
+    default_fetch_size,
+    default_output_dir,
+    fetch_missing_enabled,
+)
 from .instructions import INSTRUCTIONS
 from .render_pictogram_layout import register as register_render_layout
 from .render_pictogram_sheet import register as register_render_sheet
@@ -27,6 +33,8 @@ def create_server(
     icons_dir: Path | str | None = None,
     output_dir: Path | str | None = None,
     save: bool = True,
+    fetch_missing: bool | None = None,
+    cache_dir: Path | str | None = None,
 ) -> "FastMCP":
     """Build the MCP server.
 
@@ -34,8 +42,17 @@ def create_server(
     (the default), rendered sheets are also written to ``output_dir`` —
     ``ARASAAC_OUTPUT_DIR`` or ``./output`` — and served under ``/sheet/<name>``
     so the result can point the host at the image by URL.
+
+    ``fetch_missing`` (``ARASAAC_FETCH``, default on) lets a pictogram that is
+    not on disk be downloaded from ARASAAC into ``cache_dir``
+    (``ARASAAC_CACHE_DIR``) the first time it is rendered.
     """
-    catalog = get_catalog(icons_dir)
+    catalog = get_catalog(
+        icons_dir,
+        cache_dir=default_cache_dir() if cache_dir is None else cache_dir,
+        fetch_missing=fetch_missing_enabled() if fetch_missing is None else fetch_missing,
+        fetch_size=default_fetch_size(),
+    )
     debug_dir = (default_output_dir() if output_dir is None else Path(output_dir)) if save else None
     server = FastMCP(name="arasaac-mcp", instructions=INSTRUCTIONS)
     context = ServerContext(catalog=catalog, output_dir=debug_dir)
@@ -89,13 +106,30 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Do not write debug files; only return the image in the tool result.",
     )
+    parser.add_argument(
+        "--cache-dir",
+        type=Path,
+        default=None,
+        help="Writable cache for fetched pictograms (default: ARASAAC_CACHE_DIR).",
+    )
+    parser.add_argument(
+        "--no-fetch",
+        action="store_true",
+        help="Never download missing pictograms (offline); fail instead.",
+    )
     args = parser.parse_args(argv)
 
     icons_dir = args.icons_dir or default_icons_dir()
     if not Path(icons_dir).is_dir():
         parser.error(f"icons directory not found: {icons_dir}")
 
-    server = create_server(icons_dir, output_dir=args.output_dir, save=not args.no_save)
+    server = create_server(
+        icons_dir,
+        output_dir=args.output_dir,
+        save=not args.no_save,
+        fetch_missing=False if args.no_fetch else None,
+        cache_dir=args.cache_dir,
+    )
     if args.transport == "stdio":
         server.run(transport="stdio")
     else:

@@ -1,8 +1,9 @@
-"""Locate and read the ``arasaac`` Agent Skill.
+"""Locate and read the ``arasaac`` Agent Skill and the recipe resources.
 
-The skill files are generated from ``scripts/prompt.md`` by ``scripts/build_skill.py``.
-The MCP server reuses them as its prompt and resource, so the recipe has exactly
-one source of truth.
+The thin skill is generated into ``skills/arasaac/`` by ``scripts/build_skill.py``;
+the recipe parts it points at are generated into ``arasaac_mcp/recipe/`` (inside
+the package, so an installed wheel keeps them) and served as MCP resources.
+``scripts/prompt.md`` remains the single source of truth.
 """
 
 from __future__ import annotations
@@ -36,30 +37,26 @@ def skill_markdown() -> str:
     return (directory / "SKILL.md").read_text(encoding="utf-8")
 
 
-def reference_paths() -> list[Path]:
-    """All reference documents, sorted by name."""
-    directory = skill_dir()
-    if directory is None:
-        return []
-    return sorted((directory / "references").glob("*.md"))
+def recipe_paths() -> list[Path]:
+    """All recipe parts inside the package, sorted by name."""
+    directory = _REPO_ROOT / "arasaac_mcp" / "recipe"
+    return sorted(directory.glob("*.md"))
 
 
 def rules_text() -> str:
-    """The full recipe: ``SKILL.md`` followed by every reference document.
+    """The full recipe.
 
-    Falls back to ``scripts/prompt.md`` and finally to an embedded minimal summary, so
-    the MCP prompt keeps working in an installed wheel.
+    ``scripts/prompt.md`` is the single source of truth; without it (installed
+    wheel), the packaged recipe parts are joined, and without those an embedded
+    minimal summary keeps the MCP prompt working.
     """
-    directory = skill_dir()
-    if directory is not None:
-        parts = [(directory / "SKILL.md").read_text(encoding="utf-8").strip()]
-        for path in reference_paths():
-            parts.append(path.read_text(encoding="utf-8").strip())
-        return "\n\n---\n\n".join(parts)
-
     prompt = _REPO_ROOT / "scripts" / "prompt.md"
     if prompt.is_file():
         return prompt.read_text(encoding="utf-8").strip()
+
+    parts = [path.read_text(encoding="utf-8").strip() for path in recipe_paths()]
+    if parts:
+        return "\n\n---\n\n".join(parts)
 
     return _FALLBACK_RULES
 
