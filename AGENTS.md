@@ -54,6 +54,7 @@ core.
 | `skills/arasaac/` | **generated** thin Agent Skill (`SKILL.md` only); do not edit by hand |
 | `arasaac_mcp/recipe/` | **generated** recipe parts, served as `arasaac://rules/<part>` resources; do not edit by hand |
 | `Dockerfile`, `docker-compose.yml`, `.dockerignore` | Metadata-only image (code + fonts + `metadata_de.json`); pictograms are fetched on demand, no API key |
+| `.github/workflows/docker.yml` | CI: builds the metadata-only image and smoke-tests it; never downloads the pictogram set |
 | `examples/mcp.json` | MCP host config template (stdio) |
 | `scripts/download_icons.py` | Downloads the pictograms + `metadata_de.json` (stdlib only) |
 | `assets/fonts/NotoSans-*.ttf` | Umlaut-capable fonts for captions |
