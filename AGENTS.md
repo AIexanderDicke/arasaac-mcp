@@ -54,7 +54,7 @@ core.
 | `skills/arasaac/` | **generated** thin Agent Skill (`SKILL.md` only); do not edit by hand |
 | `arasaac_mcp/recipe/` | **generated** recipe parts, served as `arasaac://rules/<part>` resources; do not edit by hand |
 | `Dockerfile`, `docker-compose.yml`, `.dockerignore` | Metadata-only image (code + fonts + `metadata_de.json`); pictograms are fetched on demand, no API key |
-| `.github/workflows/docker.yml` | CI: builds the metadata-only image and smoke-tests it; never downloads the pictogram set |
+| `.github/workflows/docker.yml` | CI: builds the metadata-only image, smoke-tests it, and publishes it to GHCR; never downloads the pictogram set |
 | `examples/mcp.json` | MCP host config template (stdio) |
 | `scripts/download_icons.py` | Downloads the pictograms + `metadata_de.json` (stdlib only) |
 | `assets/fonts/NotoSans-*.ttf` | Umlaut-capable fonts for captions |
@@ -286,6 +286,18 @@ docker build -t arasaac-mcp .
 docker run --rm -p 8000:8000 -v arasaac-cache:/app/cache arasaac-mcp --transport http --host 0.0.0.0   # :8000/mcp
 docker run --rm -i arasaac-mcp --transport stdio                                                        # stdio
 docker compose up --build                                                                               # HTTP + output/cache volumes
+```
+
+CI publishes the same image to GHCR on every non-PR push: tag = the branch name
+(sanitised), plus `latest` on `main` and semver tags on `v*`. The repository is
+private, so pulling needs a token with the `read:packages` scope:
+
+```bash
+echo "$GH_TOKEN" | docker login ghcr.io -u <owner> --password-stdin
+docker pull ghcr.io/aiexanderdicke/arasaac-mcp:main
+docker run --rm -p 8000:8000 -v arasaac-cache:/app/cache \
+  -e ARASAAC_TRANSPORT=http -e ARASAAC_HOST=0.0.0.0 \
+  ghcr.io/aiexanderdicke/arasaac-mcp:main
 ```
 
 Compose sets transport/host/port via `ARASAAC_TRANSPORT` / `ARASAAC_HOST` /
