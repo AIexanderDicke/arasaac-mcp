@@ -29,9 +29,11 @@ def render_word_sheet(
         raise ValueError("roles must have the same length as words")
     normalized_roles = [role.upper() for role in roles] if roles else None
     if normalized_roles:
-        for role in normalized_roles:
-            if role not in VALID_ROLES:
-                raise ValueError(f'Invalid role "{role}" (expected: {", ".join(VALID_ROLES)})')
+        for normalized_role in normalized_roles:
+            if normalized_role not in VALID_ROLES:
+                raise ValueError(
+                    f'Invalid role "{normalized_role}" (expected: {", ".join(VALID_ROLES)})'
+                )
 
     entries = []
     for index, word in enumerate(words):
@@ -44,8 +46,9 @@ def render_word_sheet(
         columns=columns,
         sentence=sentence,
         meaning=meaning,
-        **({"icon_size": icon_size} if icon_size else {}),
     )
+    if icon_size:
+        options.icon_size = icon_size
     image = render_sheet(entries, options, icons_dir=catalog.icons_dir)
     rendered_words = ", ".join(catalog.label_of(catalog.resolve(word)) for word in words)
     lines = [f"Rendered pictogram sheet: {rendered_words}"]
@@ -55,7 +58,7 @@ def render_word_sheet(
     return render_result(lines, png_bytes(image), saved)
 
 
-def register(server: "FastMCP", context: ServerContext) -> None:
+def register(server: FastMCP, context: ServerContext) -> None:
     """Register ``render_pictogram_sheet`` on ``server``."""
 
     @server.tool

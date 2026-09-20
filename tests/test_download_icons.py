@@ -53,7 +53,10 @@ def test_download_skips_existing_file(download_icons: ModuleType, tmp_path: Path
     out.mkdir()
     (out / "7_Regen.png").write_bytes(b"already here")
 
-    assert download_icons.download({"_id": 7, "keywords": [{"keyword": "Regen"}]}, out, 500) == "skipped"
+    assert (
+        download_icons.download({"_id": 7, "keywords": [{"keyword": "Regen"}]}, out, 500)
+        == "skipped"
+    )
 
 
 def test_download_falls_back_to_smaller_size(
@@ -81,7 +84,9 @@ def test_download_falls_back_to_smaller_size(
 def test_download_reports_failure_when_all_sizes_missing(
     download_icons: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(download_icons, "fetch", lambda url: (_ for _ in ()).throw(_http_error(url)))
+    monkeypatch.setattr(
+        download_icons, "fetch", lambda url: (_ for _ in ()).throw(_http_error(url))
+    )
     out = tmp_path / "icons"
     out.mkdir()
 

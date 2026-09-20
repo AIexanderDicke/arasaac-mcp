@@ -119,7 +119,16 @@ def test_main_json_alternative_by_label(icons_dir: Path, tmp_path: Path) -> None
     )
     output = tmp_path / "alt.png"
     rc = cli.main(
-        ["--icons-dir", str(icons_dir), "--json", str(contract), "--alternative", "kurz", "-o", str(output)]
+        [
+            "--icons-dir",
+            str(icons_dir),
+            "--json",
+            str(contract),
+            "--alternative",
+            "kurz",
+            "-o",
+            str(output),
+        ]
     )
     assert rc == 0 and output.is_file()
 
@@ -127,11 +136,25 @@ def test_main_json_alternative_by_label(icons_dir: Path, tmp_path: Path) -> None
 def test_main_json_alternative_by_index(icons_dir: Path, tmp_path: Path) -> None:
     contract = _write(
         tmp_path / "contract.json",
-        {"alternatives": [{"label": "a", "files": ["1_Regen.png"]}, {"label": "b", "files": ["6_rot.png"]}]},
+        {
+            "alternatives": [
+                {"label": "a", "files": ["1_Regen.png"]},
+                {"label": "b", "files": ["6_rot.png"]},
+            ]
+        },
     )
     output = tmp_path / "alt.png"
     rc = cli.main(
-        ["--icons-dir", str(icons_dir), "--json", str(contract), "--alternative", "1", "-o", str(output)]
+        [
+            "--icons-dir",
+            str(icons_dir),
+            "--json",
+            str(contract),
+            "--alternative",
+            "1",
+            "-o",
+            str(output),
+        ]
     )
     assert rc == 0 and output.is_file()
 
@@ -157,7 +180,16 @@ def test_main_json_layout_with_page_size(icons_dir: Path, tmp_path: Path) -> Non
     )
     output = tmp_path / "a4.png"
     rc = cli.main(
-        ["--icons-dir", str(icons_dir), "--json", str(layout), "--page-size", "a4-landscape", "-o", str(output)]
+        [
+            "--icons-dir",
+            str(icons_dir),
+            "--json",
+            str(layout),
+            "--page-size",
+            "a4-landscape",
+            "-o",
+            str(output),
+        ]
     )
     assert rc == 0 and output.is_file()
 

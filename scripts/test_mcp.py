@@ -53,7 +53,10 @@ print("\n== catalog ==")
 catalog = get_catalog(ROOT / "icons")
 
 lines = catalog.search_lines("Regen", 5)
-check(bool(re.match(r"^1\. Regen\b", lines[0])) if lines else False, "search returns word 'Regen' first")
+check(
+    bool(re.match(r"^1\. Regen\b", lines[0])) if lines else False,
+    "search returns word 'Regen' first",
+)
 check(not any(re.search(r"\d+_", line) for line in lines), "search output has no numeric ids")
 
 lines = catalog.search_lines("PKW", 5)
@@ -77,7 +80,10 @@ for query in ["Schüler", "Auto", "vor", "Sport", "Regen", "Familie"]:
             fail(f"label does not round-trip: {label}")
 check(checked > 0 and mismatches == 0, f"{checked - mismatches}/{checked} search labels round-trip")
 
-node = catalog.resolve_layout_node({"type": "row", "children": ["Auto", {"type": "icon", "word": "Berg"}]})
+node = catalog.resolve_layout_node(
+    {"type": "row", "children": ["Auto", {"type": "icon", "word": "Berg"}]}
+)
+assert node is not None
 check(
     node["children"][0]["file"].endswith(".png") and node["children"][1]["concept"] == "Berg",
     "layout tree words resolve to files/concepts",
@@ -148,7 +154,8 @@ async def exercise() -> None:
         tool_list = await client.list_tools()
         tools = {tool.name for tool in tool_list}
         check(
-            tools == {
+            tools
+            == {
                 "search_pictograms",
                 "view_pictogram",
                 "render_pictogram_sheet",
@@ -159,7 +166,10 @@ async def exercise() -> None:
         prompts = {prompt.name for prompt in await client.list_prompts()}
         check("pictogram_transcriber" in prompts, "prompt registered")
         resources = {str(resource.uri) for resource in await client.list_resources()}
-        part_uris = {f"arasaac://rules/{stem}" for stem in ("workflow", "design", "layouts", "contract", "sources")}
+        part_uris = {
+            f"arasaac://rules/{stem}"
+            for stem in ("workflow", "design", "layouts", "contract", "sources")
+        }
         check(
             part_uris <= resources,
             "recipe parts registered as resources (no viewer resource any more)",
@@ -176,7 +186,16 @@ async def exercise() -> None:
         view_text = "\n".join(part.text for part in result.content if part.type == "text")
         check('Show "Auto"' in view_text, "view_pictogram reports the label")
         check(
-            image_url_ok(next((l.split()[-1] for l in view_text.splitlines() if l.startswith("Image: ")), "")),
+            image_url_ok(
+                next(
+                    (
+                        row.split()[-1]
+                        for row in view_text.splitlines()
+                        if row.startswith("Image: ")
+                    ),
+                    "",
+                )
+            ),
             "view_pictogram reports the icon URL (no image block dumped as JSON)",
         )
         check(
@@ -193,13 +212,18 @@ async def exercise() -> None:
             },
         )
         text = "\n".join(part.text for part in result.content if part.type == "text")
-        image_url = next((line.split()[-1] for line in text.splitlines() if line.startswith("Image: ")), "")
+        image_url = next(
+            (line.split()[-1] for line in text.splitlines() if line.startswith("Image: ")), ""
+        )
         check(
             image_url_ok(image_url),
             "render text reports the image URL (the host previews it)",
         )
         debug_files = sorted(out_dir.glob("*.png"))
-        check(bool(debug_files), f"render_pictogram_sheet writes a local debug file ({len(debug_files)})")
+        check(
+            bool(debug_files),
+            f"render_pictogram_sheet writes a local debug file ({len(debug_files)})",
+        )
         check(
             image_url.endswith("/" + debug_files[-1].name) if debug_files else False,
             "image URL points at the saved debug file",
@@ -233,7 +257,16 @@ async def exercise() -> None:
         )
         grid_text = "\n".join(part.text for part in result.content if part.type == "text")
         check(
-            image_url_ok(next((l.split()[-1] for l in grid_text.splitlines() if l.startswith("Image: ")), "")),
+            image_url_ok(
+                next(
+                    (
+                        row.split()[-1]
+                        for row in grid_text.splitlines()
+                        if row.startswith("Image: ")
+                    ),
+                    "",
+                )
+            ),
             "render_pictogram_layout (grid) reports an image URL",
         )
 
@@ -253,7 +286,16 @@ async def exercise() -> None:
         )
         cards_text = "\n".join(part.text for part in result.content if part.type == "text")
         check(
-            image_url_ok(next((l.split()[-1] for l in cards_text.splitlines() if l.startswith("Image: ")), "")),
+            image_url_ok(
+                next(
+                    (
+                        row.split()[-1]
+                        for row in cards_text.splitlines()
+                        if row.startswith("Image: ")
+                    ),
+                    "",
+                )
+            ),
             "render_pictogram_layout (cards + arrow) reports an image URL",
         )
 
@@ -267,7 +309,9 @@ async def exercise() -> None:
             bad_role = True
         check(bad_role, "invalid role is rejected")
 
-        prompt = await client.get_prompt("pictogram_transcriber", {"text": "Hände waschen vor dem Essen"})
+        prompt = await client.get_prompt(
+            "pictogram_transcriber", {"text": "Hände waschen vor dem Essen"}
+        )
         text = prompt.messages[0].content.text
         check(
             "Antworte immer auf Deutsch" in text and "Hände waschen" in text,
@@ -341,7 +385,9 @@ async def exercise_lazy_fetch() -> None:
                 os.environ.pop("ARASAAC_STATIC_URL", None)
             else:
                 os.environ["ARASAAC_STATIC_URL"] = previous
-        check((cache / full.resolve("Regen").file).is_file(), "lazy MCP render cached the pictogram")
+        check(
+            (cache / full.resolve("Regen").file).is_file(), "lazy MCP render cached the pictogram"
+        )
 
 
 asyncio.run(exercise())

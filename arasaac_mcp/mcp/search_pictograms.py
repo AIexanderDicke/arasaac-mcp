@@ -13,14 +13,11 @@ def search(catalog: Catalog, query: str, limit: int = 25) -> str:
         return "Empty search query."
     lines = catalog.search_lines(query, limit)
     if not lines:
-        return (
-            f'No pictograms found for "{query}". '
-            "Try a synonym or a simpler noun."
-        )
+        return f'No pictograms found for "{query}". Try a synonym or a simpler noun.'
     return f'Found: {len(lines)} matches for "{query}":\n' + "\n".join(lines)
 
 
-def register(server: "FastMCP", context: ServerContext) -> None:
+def register(server: FastMCP, context: ServerContext) -> None:
     """Register ``search_pictograms`` on ``server``."""
 
     @server.tool

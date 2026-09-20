@@ -19,8 +19,9 @@ if str(REPO_ROOT) not in sys.path:
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from arasaac_mcp.catalog import Catalog, _CATALOG_CACHE, _INDEX_CACHE  # noqa: E402
 from helpers import build_icons_dir  # noqa: E402
+
+from arasaac_mcp.catalog import _CATALOG_CACHE, _INDEX_CACHE, Catalog  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

@@ -20,11 +20,11 @@ The MCP server should then listen on a different internal port, e.g. 8001:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import selectors
 import socket
 import sys
 import threading
-import time
 
 BUFFER = 65536
 
@@ -40,10 +40,8 @@ def pump(src: socket.socket, dst: socket.socket) -> None:
         pass
     finally:
         for sock in (src, dst):
-            try:
+            with contextlib.suppress(OSError):
                 sock.shutdown(socket.SHUT_RDWR)
-            except OSError:
-                pass
 
 
 def handle(client: socket.socket, upstream_host: str, upstream_port: int) -> None:
@@ -83,6 +81,7 @@ def main() -> int:
     sel.register(server, selectors.EVENT_READ)
     while True:
         for key, _ in sel.select():
+            assert isinstance(key.fileobj, socket.socket)
             client, _ = key.fileobj.accept()
             threading.Thread(
                 target=handle,

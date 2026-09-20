@@ -12,11 +12,12 @@ from pathlib import Path
 
 import pytest
 from fastmcp import Client
+from fastmcp.exceptions import ToolError
+from helpers import make_png
 from starlette.testclient import TestClient
 
 from arasaac_mcp.mcp import create_server
 from arasaac_mcp.mcp.server import main as server_main
-from helpers import build_icons_dir, make_png
 
 
 def _texts(result) -> str:
@@ -24,9 +25,7 @@ def _texts(result) -> str:
 
 
 def _image_url(text: str) -> str:
-    return next(
-        (line.split()[-1] for line in text.splitlines() if line.startswith("Image: ")), ""
-    )
+    return next((line.split()[-1] for line in text.splitlines() if line.startswith("Image: ")), "")
 
 
 @pytest.fixture
@@ -150,7 +149,7 @@ async def test_render_layout_tool_cards_and_arrow(server) -> None:
 
 async def test_invalid_role_is_rejected(server) -> None:
     async with Client(server) as client:
-        with pytest.raises(Exception):
+        with pytest.raises(ToolError):
             await client.call_tool(
                 "render_pictogram_layout",
                 {"layout": {"type": "icon", "word": "Regen", "role": "NOPE"}},
@@ -159,7 +158,7 @@ async def test_invalid_role_is_rejected(server) -> None:
 
 async def test_unknown_word_is_rejected(server) -> None:
     async with Client(server) as client:
-        with pytest.raises(Exception):
+        with pytest.raises(ToolError):
             await client.call_tool("view_pictogram", {"word": "Zebra"})
 
 
@@ -280,7 +279,7 @@ async def test_server_without_fetch_fails_on_missing_icon(icons_dir: Path) -> No
     (icons_dir / "1_Regen.png").unlink()
     server = create_server(icons_dir, save=False, fetch_missing=False)
     async with Client(server) as client:
-        with pytest.raises(Exception):
+        with pytest.raises(ToolError):
             await client.call_tool("render_pictogram_sheet", {"words": ["Regen"]})
 
 
@@ -347,7 +346,16 @@ def test_main_runs_http_with_host_and_port(
 
     assert (
         server_main(
-            ["--icons-dir", str(icons_dir), "--transport", "http", "--host", "0.0.0.0", "--port", "9000"]
+            [
+                "--icons-dir",
+                str(icons_dir),
+                "--transport",
+                "http",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "9000",
+            ]
         )
         == 0
     )

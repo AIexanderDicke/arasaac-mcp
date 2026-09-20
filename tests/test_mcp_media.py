@@ -5,10 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from helpers import make_png
 from PIL import Image
 
 from arasaac_mcp.mcp import media
-from helpers import make_png
 
 
 def _png() -> bytes:
@@ -56,9 +56,7 @@ def test_save_png_names_files_deterministically(
     assert first.is_file() and second.is_file()
 
 
-def test_save_icon_copies_into_output_dir(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_save_icon_copies_into_output_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(media.time, "time", lambda: 2000.0)
     monkeypatch.setattr(media.secrets, "token_hex", lambda _n: "cafe")
     icon = make_png(tmp_path / "src" / "42_Auto.png")

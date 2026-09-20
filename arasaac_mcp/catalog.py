@@ -19,9 +19,9 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 from .fetch import PictogramFetchError, fetch_pictogram
 
@@ -85,10 +85,9 @@ def _score(pic: Pictogram, tokens: Iterable[str]) -> float:
             value = keyword.lower()
             if value == token:
                 best = max(best, 6)
-            elif value.startswith(token):
-                best = max(best, 4)
-            # Forgiving stem match: "rotes" -> "rot", "Autos" -> "Auto".
-            elif len(token) >= 4 and len(value) >= 3 and token.startswith(value):
+            elif value.startswith(token) or (
+                len(token) >= 4 and len(value) >= 3 and token.startswith(value)
+            ):
                 best = max(best, 4)
             elif token in value:
                 best = max(best, 2)
@@ -169,8 +168,10 @@ def _load_index(icons_dir: Path) -> list[Pictogram]:
                 for item in entry.get("keywords", [])
                 if str(item.get("keyword", "")).strip()
             )
-            extra = _dedupe(
-                [str(value) for value in [*entry.get("tags", []), *entry.get("categories", [])]]
+            extra = tuple(
+                _dedupe(
+                    [str(value) for value in [*entry.get("tags", []), *entry.get("categories", [])]]
+                )
             )
             desc = desc_by_id.get(pic_id) or _first_keyword(entry) or Path(file).stem
             pics.append(Pictogram(file, desc, keywords, extra, pic_id))
@@ -234,7 +235,7 @@ class Catalog:
         if self._counts is None:
             counts: dict[str, int] = {}
             for pic in self._pics:
-                for keyword in set(keyword.lower() for keyword in pic.keywords):
+                for keyword in {keyword.lower() for keyword in pic.keywords}:
                     counts[keyword] = counts.get(keyword, 0) + 1
             self._counts = counts
         return self._counts
@@ -269,9 +270,7 @@ class Catalog:
         tokens = _tokenize(query)
         if not tokens:
             return []
-        scored = [
-            SearchHit(pic, _score(pic, tokens)) for pic in self._pics
-        ]
+        scored = [SearchHit(pic, _score(pic, tokens)) for pic in self._pics]
         scored = [hit for hit in scored if hit.value > 0]
         return self._dedupe_by_label(scored)[: max(1, min(limit, 100))]
 
@@ -313,14 +312,16 @@ class Catalog:
         base_lower = base.lower()
 
         candidates = [
-            pic for pic in self._pics
+            pic
+            for pic in self._pics
             if any(keyword.lower() == base_lower for keyword in pic.keywords)
         ]
         if not candidates:
             candidates = [pic for pic in self._pics if self.word_of(pic).lower() == base_lower]
         if qualifier:
             qualified = [
-                pic for pic in candidates
+                pic
+                for pic in candidates
                 if any(keyword.lower() == qualifier for keyword in pic.keywords)
             ]
             if qualified:
@@ -344,8 +345,7 @@ class Catalog:
                 best = pic
         if best is None:
             raise KeyError(
-                f"No pictogram found for {word!r}. "
-                "Search for a simpler word or a synonym."
+                f"No pictogram found for {word!r}. Search for a simpler word or a synonym."
             )
         return best
 

@@ -113,7 +113,9 @@ def main(argv: list[str] | None = None) -> int:
         else:
             alternative: int | str | None = None
             if args.alternative is not None:
-                alternative = int(args.alternative) if args.alternative.isdigit() else args.alternative
+                alternative = (
+                    int(args.alternative) if args.alternative.isdigit() else args.alternative
+                )
             entries, meta = entries_from_json(data, args.icons_dir, alternative)
             sentence = sentence or meta.get("sentence")
             meaning = meaning or meta.get("meaning")

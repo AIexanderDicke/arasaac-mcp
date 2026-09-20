@@ -35,7 +35,7 @@ def create_server(
     save: bool = True,
     fetch_missing: bool | None = None,
     cache_dir: Path | str | None = None,
-) -> "FastMCP":
+) -> FastMCP:
     """Build the MCP server.
 
     ``icons_dir`` defaults to ``ARASAAC_ICONS_DIR``.  When ``save`` is true

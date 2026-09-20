@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from helpers import build_icons_dir, make_png
 
 from arasaac_mcp.catalog import (
     VALID_ROLES,
@@ -14,7 +15,6 @@ from arasaac_mcp.catalog import (
     default_icons_dir,
     get_catalog,
 )
-from helpers import build_icons_dir, make_png
 
 # --------------------------------------------------------------------------- #
 # helpers
@@ -38,7 +38,7 @@ def test_pictures_index_metadata_entries(catalog: Catalog) -> None:
     by_file = {pic.file: pic for pic in catalog.pictures}
     assert by_file["1_Regen.png"].keywords == ("Regen",)
     assert by_file["1_Regen.png"].pic_id == 1
-    assert by_file["1_Regen.png"].extra == ["Wetter", "Natur"]
+    assert by_file["1_Regen.png"].extra == ("Wetter", "Natur")
     assert by_file["2_Auto.png"].keywords == ("Auto", "KFZ")
 
 
@@ -309,9 +309,7 @@ def test_ensure_fetches_into_the_cache_and_is_then_local(tmp_path: Path) -> None
     source = make_png(static / "42" / "42_500.png")
     cache = tmp_path / "cache"
 
-    catalog = Catalog(
-        icons, cache_dir=cache, fetch_missing=True, static_url=static.as_uri()
-    )
+    catalog = Catalog(icons, cache_dir=cache, fetch_missing=True, static_url=static.as_uri())
     pic = catalog.resolve("Regen")
     first = catalog.ensure(pic)
     second = catalog.ensure(pic)
@@ -387,9 +385,7 @@ def test_resolve_layout_node_keeps_explicit_file_and_concept(catalog: Catalog) -
 
 
 def test_resolve_layout_node_text_suppresses_concept(catalog: Catalog) -> None:
-    node = catalog.resolve_layout_node(
-        {"type": "icon", "word": "Regen", "text": "eigener Text"}
-    )
+    node = catalog.resolve_layout_node({"type": "icon", "word": "Regen", "text": "eigener Text"})
     assert node["text"] == "eigener Text"
     assert "concept" not in node
 
@@ -414,9 +410,7 @@ def test_resolve_layout_node_recurses_children_items_child_and_node(catalog: Cat
     children = catalog.resolve_layout_node({"type": "row", "children": ["Regen"]})
     items = catalog.resolve_layout_node({"type": "row", "items": ["Regen"]})
     child = catalog.resolve_layout_node({"type": "card", "child": "Regen"})
-    node = catalog.resolve_layout_node(
-        {"type": "canvas", "children": [{"x": 5, "node": "Regen"}]}
-    )
+    node = catalog.resolve_layout_node({"type": "canvas", "children": [{"x": 5, "node": "Regen"}]})
 
     assert children["children"][0]["concept"] == "Regen"
     assert items["items"][0]["concept"] == "Regen"

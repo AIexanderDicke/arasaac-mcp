@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -163,8 +162,8 @@ def test_render_sheet_role_colour_frame(icons_dir: Path) -> None:
     )
     # Top edge of the single card, away from the rounded corners.
     pixel = image.getpixel((428, 48))
-    expected = tuple(int(ROLE_COLORS["NOUN"][i : i + 2], 16) for i in (1, 3, 5)) + (255,)
-    assert pixel == expected
+    rgb = tuple(int(ROLE_COLORS["NOUN"][i : i + 2], 16) for i in (1, 3, 5))
+    assert pixel == (*rgb, 255)
 
 
 def test_render_sheet_neutral_frame_without_role(icons_dir: Path) -> None:
@@ -198,9 +197,7 @@ def test_render_sheet_max_columns_wraps(icons_dir: Path) -> None:
 
 
 def test_render_sheet_scale_zero_is_treated_as_one(icons_dir: Path) -> None:
-    image = render_sheet(
-        [Entry(icons_dir / "1_Regen.png")], _opts(scale=0), icons_dir=icons_dir
-    )
+    image = render_sheet([Entry(icons_dir / "1_Regen.png")], _opts(scale=0), icons_dir=icons_dir)
     assert image.size == (856, 428)
 
 
@@ -245,9 +242,7 @@ def test_render_and_save_writes_every_output(tmp_path: Path, icons_dir: Path) ->
 
 def test_render_layout_and_save_writes_output(tmp_path: Path, icons_dir: Path) -> None:
     spec = {"type": "icon", "file": "1_Regen.png"}
-    written = render_layout_and_save(
-        spec, [tmp_path / "layout.png"], _opts(), icons_dir=icons_dir
-    )
+    written = render_layout_and_save(spec, [tmp_path / "layout.png"], _opts(), icons_dir=icons_dir)
     assert written[0].is_file()
 
 
@@ -284,7 +279,7 @@ def test_entries_from_json_alternative_by_index(icons_dir: Path) -> None:
 
 def test_entries_from_json_alternative_by_label(icons_dir: Path) -> None:
     data = {"alternatives": [{"label": "kurz", "files": ["6_rot.png"]}]}
-    entries, meta = entries_from_json(data, icons_dir, alternative="kurz")
+    entries, _meta = entries_from_json(data, icons_dir, alternative="kurz")
     assert [entry.path.name for entry in entries] == ["6_rot.png"]
 
 
@@ -317,7 +312,10 @@ def test_entries_from_json_missing_file_raises(icons_dir: Path) -> None:
             "rows": [{"header": "1.", "cells": ["1_Regen.png", None]}],
         },
         {"type": "table", "columns": ["A"], "rows": [["1_Regen.png"]]},
-        {"type": "canvas", "children": [{"x": 10, "y": 10, "node": {"type": "icon", "file": "1_Regen.png"}}]},
+        {
+            "type": "canvas",
+            "children": [{"x": 10, "y": 10, "node": {"type": "icon", "file": "1_Regen.png"}}],
+        },
         {"type": "arrow", "direction": "right"},
         {"type": "arrow", "direction": "left"},
         {"type": "arrow", "direction": "up"},
@@ -423,7 +421,12 @@ def test_render_layout_unknown_page_size_raises(bad: str, icons_dir: Path) -> No
 def test_render_layout_row_justify_and_column_align(icons_dir: Path) -> None:
     for justify in ("start", "center", "end", "space-between"):
         image = render_layout(
-            {"type": "row", "justify": justify, "width": 600, "children": ["1_Regen.png", "6_rot.png"]},
+            {
+                "type": "row",
+                "justify": justify,
+                "width": 600,
+                "children": ["1_Regen.png", "6_rot.png"],
+            },
             _opts(),
             icons_dir=icons_dir,
         )
@@ -482,7 +485,9 @@ def test_render_layout_text_uppercase_and_width(icons_dir: Path) -> None:
 
 
 def test_render_layout_arrow_direction_swaps_axes(icons_dir: Path) -> None:
-    horizontal = render_layout({"type": "arrow", "direction": "right"}, _opts(), icons_dir=icons_dir)
+    horizontal = render_layout(
+        {"type": "arrow", "direction": "right"}, _opts(), icons_dir=icons_dir
+    )
     vertical = render_layout({"type": "arrow", "direction": "up"}, _opts(), icons_dir=icons_dir)
     # The arrow is centred in a min-width canvas; the icon-sized box differs.
     assert horizontal.height < vertical.height
@@ -516,9 +521,7 @@ def test_render_layout_rejects_a_nested_non_node(icons_dir: Path) -> None:
 
 
 def test_render_layout_typeless_node_becomes_column(icons_dir: Path) -> None:
-    image = render_layout(
-        {"layout": {"children": ["1_Regen.png"]}}, _opts(), icons_dir=icons_dir
-    )
+    image = render_layout({"layout": {"children": ["1_Regen.png"]}}, _opts(), icons_dir=icons_dir)
     assert image.height > 0
 
 

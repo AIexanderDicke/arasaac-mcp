@@ -23,9 +23,10 @@ from __future__ import annotations
 import json
 import math
 import os
-from dataclasses import dataclass, field
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import cast
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
@@ -167,7 +168,9 @@ def load_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
     for candidate in _font_candidates(bold):
         if candidate.is_file():
             return ImageFont.truetype(str(candidate), size)
-    return ImageFont.load_default(size=size)
+    # Pillow's default font is a FreeTypeFont when a size is given; the stubs
+    # only promise the base class.
+    return cast(ImageFont.FreeTypeFont, ImageFont.load_default(size=size))
 
 
 def wrap_text(
@@ -208,9 +211,7 @@ def resolve_icon(name: str | Path, icons_dir: Path) -> Path:
 # --------------------------------------------------------------------------- #
 
 
-def _normalise_entries(
-    entries: Sequence[Entry | str | Path], icons_dir: Path
-) -> list[Entry]:
+def _normalise_entries(entries: Sequence[Entry | str | Path], icons_dir: Path) -> list[Entry]:
     result: list[Entry] = []
     for item in entries:
         if isinstance(item, Entry):
@@ -236,10 +237,7 @@ def render_sheet(
     n = len(items)
 
     # --- geometry ---------------------------------------------------------
-    if opts.columns:
-        cols = max(1, min(opts.columns, n))
-    else:
-        cols = min(n, max(1, opts.max_columns))
+    cols = max(1, min(opts.columns, n)) if opts.columns else min(n, max(1, opts.max_columns))
     rows = math.ceil(n / cols)
 
     pad = opts.padding * s
@@ -274,7 +272,7 @@ def render_sheet(
 
     line_gap = int(opts.icon_size * 0.03) * s
     header_h = 0
-    for line, font, _ in header_lines:
+    for _line, font, _ in header_lines:
         header_h += int(font.size * 1.35) + line_gap // 2
     if header_lines:
         header_h += gap
@@ -316,7 +314,7 @@ def render_sheet(
             )
 
         icon = Image.open(entry.path).convert("RGBA")
-        icon = ImageOps.contain(icon, (icon_box, icon_box), Image.LANCZOS)
+        icon = ImageOps.contain(icon, (icon_box, icon_box), Image.Resampling.LANCZOS)
         ix = x0 + pad + (icon_box - icon.width) // 2
         iy = y0 + pad + (icon_box - icon.height) // 2
         canvas.alpha_composite(icon, (ix, iy))
@@ -510,10 +508,10 @@ class LayoutContext:
         self.measure = ImageDraw.Draw(self.scratch)
 
     def px(self, value: float) -> int:
-        return int(round(float(value) * self.s))
+        return round(float(value) * self.s)
 
     def font(self, size: float, bold: bool = False) -> ImageFont.FreeTypeFont:
-        key = (int(round(size)), bool(bold))
+        key = (round(size), bool(bold))
         font = self._fonts.get(key)
         if font is None:
             font = load_font(max(1, self.px(size)), bold)
@@ -536,9 +534,7 @@ class _Node:
         self.height = 0
         handler = getattr(self, f"_measure_{self.kind}", None)
         if handler is None:
-            raise ValueError(
-                f"Unbekannter Layout-Typ {self.kind!r}. Erlaubt: {_LAYOUT_TYPES}"
-            )
+            raise ValueError(f"Unbekannter Layout-Typ {self.kind!r}. Erlaubt: {_LAYOUT_TYPES}")
         handler()
 
     @staticmethod
@@ -547,8 +543,7 @@ class _Node:
             return {"type": "icon", "file": spec}
         if not isinstance(spec, dict):
             raise ValueError(
-                f"Layout-Knoten muss ein Objekt oder Dateiname sein, "
-                f"nicht {type(spec).__name__}"
+                f"Layout-Knoten muss ein Objekt oder Dateiname sein, nicht {type(spec).__name__}"
             )
         spec = dict(spec)
         kind = str(spec.get("type", "")).strip().lower()
@@ -596,7 +591,9 @@ class _Node:
             return
         draw = ImageDraw.Draw(canvas)
         _rounded_rect(
-            draw, (x, y, x + self.width, y + self.height), self.st["radius"],
+            draw,
+            (x, y, x + self.width, y + self.height),
+            self.st["radius"],
             fill=self.st["background"],
         )
 
@@ -609,8 +606,11 @@ class _Node:
             _dashed_rect(draw, box, self.st["border"], self.st["border_width"])
         else:
             _rounded_rect(
-                draw, box, self.st["radius"],
-                outline=self.st["border"], width=self.st["border_width"],
+                draw,
+                box,
+                self.st["radius"],
+                outline=self.st["border"],
+                width=self.st["border_width"],
             )
 
     # -- icon --------------------------------------------------------------
@@ -646,7 +646,7 @@ class _Node:
                 fill="#FFFFFF" if self.ctx.opts.background != "#FFFFFF" else None,
             )
         icon = Image.open(self.path).convert("RGBA")
-        icon = ImageOps.contain(icon, (self.icon_box, self.icon_box), Image.LANCZOS)
+        icon = ImageOps.contain(icon, (self.icon_box, self.icon_box), Image.Resampling.LANCZOS)
         ix = int(x + self.pad + (self.icon_box - icon.width) / 2)
         iy = int(y + self.pad + (self.icon_box - icon.height) / 2)
         canvas.alpha_composite(icon, (ix, iy))
@@ -674,7 +674,7 @@ class _Node:
         self.pad = ctx.px(spec.get("padding", 0))
         explicit = spec.get("width")
         if explicit:
-            self.box_w = ctx.px(explicit)
+            self.box_w: float = ctx.px(explicit)
             self.lines = wrap_text(ctx.measure, text, self.font, self.box_w)
         else:
             self.lines = text.split("\n") if text else [""]
@@ -768,7 +768,7 @@ class _Node:
         cy = pad
         for child in self.children:
             if self.align in ("left", "start"):
-                ox = 0
+                ox: float = 0
             elif self.align in ("right", "end"):
                 ox = self.cross_w - child.width
             else:
@@ -818,7 +818,9 @@ class _Node:
             else:
                 self.rows_spec.append(dict(row))
 
-        ncols = len(self.columns) or max((len(r.get("cells", [])) for r in self.rows_spec), default=0)
+        ncols = len(self.columns) or max(
+            (len(r.get("cells", [])) for r in self.rows_spec), default=0
+        )
         while len(self.columns) < ncols:
             self.columns.append({})
 
@@ -831,13 +833,16 @@ class _Node:
         self.cell_nodes: list[list[_Node | None]] = []
         for row in self.rows_spec:
             cells = list(row.get("cells", []))
-            self.cell_nodes.append([self._cell_node(cells[c] if c < len(cells) else None) for c in range(ncols)])
+            self.cell_nodes.append(
+                [self._cell_node(cells[c] if c < len(cells) else None) for c in range(ncols)]
+            )
 
         self.col_w: list[int] = []
         for c in range(ncols):
             width = 0
-            if self.col_header_nodes[c]:
-                width = max(width, self.col_header_nodes[c].width)
+            col_header = self.col_header_nodes[c]
+            if col_header:
+                width = max(width, col_header.width)
             for r in range(len(self.cell_nodes)):
                 node = self.cell_nodes[r][c]
                 if node:
@@ -855,13 +860,16 @@ class _Node:
 
         self.header_h = 0
         if any(self.col_header_nodes):
-            self.header_h = max((n.height for n in self.col_header_nodes if n), default=0) + 2 * self.cell_pad
+            self.header_h = (
+                max((n.height for n in self.col_header_nodes if n), default=0) + 2 * self.cell_pad
+            )
 
         self.row_h: list[int] = []
         for r, row in enumerate(self.cell_nodes):
             height = 0
-            if self.row_header_nodes[r]:
-                height = max(height, self.row_header_nodes[r].height)
+            row_header = self.row_header_nodes[r]
+            if row_header:
+                height = max(height, row_header.height)
             for node in row:
                 if node:
                     height = max(height, node.height)
@@ -980,28 +988,46 @@ class _Node:
         if self.direction == "left":
             cy = y + self.height / 2
             points = [
-                (x + self.length, cy - t), (x + head, cy - t), (x + head, cy - head / 2),
-                (x, cy), (x + head, cy + head / 2), (x + head, cy + t), (x + self.length, cy + t),
+                (x + self.length, cy - t),
+                (x + head, cy - t),
+                (x + head, cy - head / 2),
+                (x, cy),
+                (x + head, cy + head / 2),
+                (x + head, cy + t),
+                (x + self.length, cy + t),
             ]
         elif self.direction == "up":
             cx = x + self.width / 2
             points = [
-                (cx - t, y + self.length), (cx - t, y + head), (cx - head / 2, y + head),
-                (cx, y), (cx + head / 2, y + head), (cx + t, y + head), (cx + t, y + self.length),
+                (cx - t, y + self.length),
+                (cx - t, y + head),
+                (cx - head / 2, y + head),
+                (cx, y),
+                (cx + head / 2, y + head),
+                (cx + t, y + head),
+                (cx + t, y + self.length),
             ]
         elif self.direction == "down":
             cx = x + self.width / 2
             points = [
-                (cx - t, y), (cx - t, y + self.length - head), (cx - head / 2, y + self.length - head),
-                (cx, y + self.length), (cx + head / 2, y + self.length - head),
-                (cx + t, y + self.length - head), (cx + t, y),
+                (cx - t, y),
+                (cx - t, y + self.length - head),
+                (cx - head / 2, y + self.length - head),
+                (cx, y + self.length),
+                (cx + head / 2, y + self.length - head),
+                (cx + t, y + self.length - head),
+                (cx + t, y),
             ]
         else:  # right
             cy = y + self.height / 2
             points = [
-                (x, cy - t), (x + self.length - head, cy - t), (x + self.length - head, cy - head / 2),
-                (x + self.length, cy), (x + self.length - head, cy + head / 2),
-                (x + self.length - head, cy + t), (x, cy + t),
+                (x, cy - t),
+                (x + self.length - head, cy - t),
+                (x + self.length - head, cy - head / 2),
+                (x + self.length, cy),
+                (x + self.length - head, cy + head / 2),
+                (x + self.length - head, cy + t),
+                (x, cy + t),
             ]
         draw.polygon(points, fill=self.color)
 
@@ -1009,7 +1035,7 @@ class _Node:
         self.width = self.ctx.px(self.spec.get("width", 0))
         self.height = self.ctx.px(self.spec.get("height", 0))
 
-    def _paint_spacer(self, canvas: Image.Image, x: float, y: float) -> None:  # noqa: ARG002
+    def _paint_spacer(self, canvas: Image.Image, x: float, y: float) -> None:
         return
 
     def _measure_divider(self) -> None:
@@ -1026,9 +1052,17 @@ class _Node:
     def _paint_divider(self, canvas: Image.Image, x: float, y: float) -> None:
         draw = ImageDraw.Draw(canvas)
         if self.orientation in ("vertical", "v"):
-            draw.line((x + self.width / 2, y, x + self.width / 2, y + self.height), fill=self.color, width=self.line_width)
+            draw.line(
+                (x + self.width / 2, y, x + self.width / 2, y + self.height),
+                fill=self.color,
+                width=self.line_width,
+            )
         else:
-            draw.line((x, y + self.height / 2, x + self.width, y + self.height / 2), fill=self.color, width=self.line_width)
+            draw.line(
+                (x, y + self.height / 2, x + self.width, y + self.height / 2),
+                fill=self.color,
+                width=self.line_width,
+            )
 
     # -- dispatch ----------------------------------------------------------
 
@@ -1093,10 +1127,14 @@ def render_layout(
     header_lines: list[tuple[str, ImageFont.FreeTypeFont, str]] = []
     if sentence:
         font = ctx.font(opts.title_size, bold=True)
-        header_lines += [(line, font, "#1A1A1A") for line in wrap_text(ctx.measure, sentence, font, content_w)]
+        header_lines += [
+            (line, font, "#1A1A1A") for line in wrap_text(ctx.measure, sentence, font, content_w)
+        ]
     if meaning:
         font = ctx.font(opts.text_size)
-        header_lines += [(line, font, "#555555") for line in wrap_text(ctx.measure, meaning, font, content_w)]
+        header_lines += [
+            (line, font, "#555555") for line in wrap_text(ctx.measure, meaning, font, content_w)
+        ]
     header_h = sum(int(font.size * 1.35) for _, font, _ in header_lines)
     if header_lines:
         header_h += ctx.px(opts.gap)

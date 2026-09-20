@@ -8,6 +8,7 @@ construction, size fallback and atomic-write code paths.
 from __future__ import annotations
 
 import pytest
+from helpers import make_png
 
 from arasaac_mcp.fetch import (
     DEFAULT_STATIC_URL,
@@ -15,7 +16,6 @@ from arasaac_mcp.fetch import (
     default_static_url,
     fetch_pictogram,
 )
-from helpers import make_png
 
 
 def test_default_static_url_uses_constant(monkeypatch: pytest.MonkeyPatch) -> None:

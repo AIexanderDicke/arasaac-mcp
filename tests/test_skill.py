@@ -24,7 +24,9 @@ def test_skill_dir_honours_env_override(tmp_path: Path, monkeypatch: pytest.Monk
     assert skill.skill_dir() == override
 
 
-def test_skill_dir_returns_none_when_absent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_skill_dir_returns_none_when_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.delenv("ARASAAC_SKILL_DIR", raising=False)
     monkeypatch.setattr(skill, "_REPO_ROOT", tmp_path / "empty")
     monkeypatch.chdir(tmp_path)
@@ -38,7 +40,9 @@ def test_skill_markdown_contains_frontmatter() -> None:
     assert "allowed-tools:" in markdown
 
 
-def test_skill_markdown_empty_without_skill(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_skill_markdown_empty_without_skill(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.delenv("ARASAAC_SKILL_DIR", raising=False)
     monkeypatch.setattr(skill, "_REPO_ROOT", tmp_path / "empty")
     monkeypatch.chdir(tmp_path)
