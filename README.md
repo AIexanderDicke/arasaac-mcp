@@ -17,6 +17,16 @@ The Docker image ships only the ~9 MB word index (`metadata_de.json`), not the
 ~338 MB pictogram set: a pictogram is fetched from ARASAAC on first use and
 cached (offline runs can pre-populate the cache and set `ARASAAC_FETCH=off`).
 
+## Run MCP Server from Docker
+
+Run the MCP server (streamable HTTP on `/mcp`), with a named volume so
+the pictograms fetched on first use survive the container:
+
+```bash
+docker run --rm -p 8000:8000 -v arasaac-cache:/app/cache -e ARASAAC_TRANSPORT=http -e ARASAAC_HOST=0.0.0.0 -e ARASAAC_PORT=8000 -e ARASAAC_PUBLIC_BASE_URL=http://localhost:8000 ghcr.io/aiexanderdicke/arasaac-mcp:main
+```
+Point the MCP host at `http://localhost:8000/mcp`.
+
 ## License & attribution
 
 This project uses the pictograms of [ARASAAC](https://arasaac.org) (the Aragonese
