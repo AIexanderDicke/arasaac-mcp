@@ -58,7 +58,7 @@ core.
 | `examples/mcp.json` | MCP host config template (stdio) |
 | `scripts/download_icons.py` | Downloads the pictograms + `metadata_de.json` (stdlib only) |
 | `assets/fonts/NotoSans-*.ttf` | Umlaut-capable fonts for captions |
-| `icons/` | **gitignored**, ~338 MB, 13,828 × `[id]_[description].png` + `metadata_de.json` |
+| `icons/` | **PNGs gitignored**, ~338 MB, 13,828 × `[id]_[description].png`; `metadata_de.json` (the ~9 MB word index) **is tracked** |
 | `output/` | **gitignored**, generated sheets |
 | `scripts/prompt.md`, `CONCEPT.md`, `README.md` | Docs |
 | `examples/` | Sample layout JSON: `stundenplan.json` (grid), `karten.json` (cards + arrow) |
@@ -77,7 +77,9 @@ core.
 uv sync                          # install deps (Pillow + fastmcp)
 ```
 
-- **Icons are not in git** (`icons/`, ~338 MB). Fetch them once (stdlib only,
+- **The PNGs are not in git** (`icons/*.png`, ~338 MB); only the word index
+  (`icons/metadata_de.json`, ~9 MB) is tracked, so the image builds without a
+  download. Fetch the PNGs once for a fully local/offline setup (stdlib only,
   no deps needed):
 
 ```bash
@@ -86,8 +88,9 @@ uv run python scripts/download_icons.py --lang de --size 500   # writes icons/ +
 
 - There are **no system fonts** in the container and Pillow's bundled default
   (Aileron) does **not** render `ä ö ü ß`. The repo bundles Noto Sans; keep it.
-- `icons/`, `.venv/`, `output/`, `__pycache__/` are gitignored. Keep it that way
-  (icons are 338 MB; committing them would be a mistake).
+- `icons/*.png`, `.venv/`, `output/`, `__pycache__/` are gitignored. Keep it
+  that way (the PNGs are 338 MB; committing them would be a mistake).
+  `icons/metadata_de.json` is deliberately **not** ignored.
 
 ### Environment variables
 
