@@ -64,7 +64,7 @@ def save_icon(icon_path: Path, output_dir: Path) -> Path:
     return path
 
 
-def render_result(lines: list[str], png: bytes, saved: Path | None) -> "ToolResult":
+def render_result(lines: list[str], png: bytes, saved: Path | None) -> ToolResult:
     """Build the tool result for a rendered sheet.
 
     When the PNG was saved, its ``/sheet/<name>`` URL is appended to ``lines``

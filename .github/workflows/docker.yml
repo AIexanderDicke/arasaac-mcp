@@ -1,10 +1,14 @@
 name: Docker
 
+# Triggered only after the Checks workflow succeeds on `main`, so the image is
+# built/published exactly once and never duplicates the lint/format/type/test
+# jobs. `workflow_run` (instead of reusing tests.yml via workflow_call) avoids
+# running those checks a second time on every main push.
 on:
-  push:
-    branches: [main, master, "feat/**"]
-    tags: ["v*"]
-  pull_request:
+  workflow_run:
+    workflows: ["Checks"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -16,10 +20,13 @@ env:
 
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       # The image ships only icons/metadata_de.json (~9 MB); pictograms are
       # fetched on demand at runtime, so CI never downloads the ~338 MB set and
@@ -32,8 +39,10 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Published after a successful `main` checks run; manual runs on other
+      # refs build locally and are never pushed.
       - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'workflow_run' || github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -47,19 +56,14 @@ jobs:
           images: ${{ steps.image.outputs.name }}
           tags: |
             type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
             type=raw,value=latest,enable={{is_default_branch}}
 
-      # Pull requests build (and load) locally; real pushes publish to GHCR.
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: ${{ github.event_name != 'pull_request' }}
-          load: ${{ github.event_name == 'pull_request' }}
+          push: ${{ github.event_name == 'workflow_run' || github.ref == 'refs/heads/main' }}
+          load: ${{ github.event_name != 'workflow_run' && github.ref != 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -68,8 +72,8 @@ jobs:
       - name: Smoke test
         run: |
           image="${{ steps.image.outputs.name }}:${{ steps.meta.outputs.version }}"
-          # PR builds are loaded locally; real pushes must be pulled back.
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
+          # A successful main run publishes, so the image must be pulled back.
+          if [ "${{ github.event_name }}" = "workflow_run" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
             docker pull "$image"
           fi
           docker run --rm "$image" --help

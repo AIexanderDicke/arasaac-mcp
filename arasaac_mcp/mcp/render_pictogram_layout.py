@@ -32,8 +32,9 @@ def render_tree(
         page_size=page_size,
         sentence=sentence,
         meaning=meaning,
-        **({"icon_size": icon_size} if icon_size else {}),
     )
+    if icon_size:
+        options.icon_size = icon_size
     image = render_layout(spec, options, icons_dir=catalog.icons_dir)
     lines = ["Rendered pictogram layout"]
     saved = save_png(image, output_dir)
@@ -42,7 +43,7 @@ def render_tree(
     return render_result(lines, png_bytes(image), saved)
 
 
-def register(server: "FastMCP", context: ServerContext) -> None:
+def register(server: FastMCP, context: ServerContext) -> None:
     """Register ``render_pictogram_layout`` on ``server``."""
 
     @server.tool

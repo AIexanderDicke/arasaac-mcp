@@ -11,7 +11,7 @@ from pathlib import Path
 from ._deps import FastMCP, Response
 
 
-def register(server: "FastMCP", output_dir: Path | None) -> None:
+def register(server: FastMCP, output_dir: Path | None) -> None:
     """Register ``GET /sheet/{name}`` on ``server``.
 
     Only files directly inside ``output_dir`` are served; ``output_dir`` may be

@@ -54,7 +54,8 @@ core.
 | `skills/arasaac/` | **generated** thin Agent Skill (`SKILL.md` only); do not edit by hand |
 | `arasaac_mcp/recipe/` | **generated** recipe parts, served as `arasaac://rules/<part>` resources; do not edit by hand |
 | `Dockerfile`, `docker-compose.yml`, `.dockerignore` | Metadata-only image (code + fonts + `metadata_de.json`); pictograms are fetched on demand, no API key |
-| `.github/workflows/docker.yml` | CI: builds the metadata-only image, smoke-tests it, and publishes it to GHCR; never downloads the pictogram set |
+| `.github/workflows/tests.yml` | CI: `ruff check`, `ruff format --check`, `mypy`, `pytest` (+ coverage) and the skill drift check |
+| `.github/workflows/docker.yml` | CI: runs the checks, builds the metadata-only image, smoke-tests it, and publishes it to GHCR **only on pushes to `main`**; never downloads the pictogram set |
 | `examples/mcp.json` | MCP host config template (stdio) |
 | `scripts/download_icons.py` | Downloads the pictograms + `metadata_de.json` (stdlib only) |
 | `assets/fonts/NotoSans-*.ttf` | Umlaut-capable fonts for captions |
@@ -91,6 +92,28 @@ uv run python scripts/download_icons.py --lang de --size 500   # writes icons/ +
 - `icons/*.png`, `.venv/`, `output/`, `__pycache__/` are gitignored. Keep it
   that way (the PNGs are 338 MB; committing them would be a mistake).
   `icons/metadata_de.json` is deliberately **not** ignored.
+
+### Tests, lint and type checks
+
+The offline suite lives in `tests/` (pytest + pytest-asyncio); its synthetic
+icon library means it needs neither the ~338 MB PNG set nor the network. CI
+(`.github/workflows/tests.yml`, workflow **Checks**) runs all of the following
+as separate `lint`, `format`, `types` and `test` jobs on every push. The Docker
+workflow then triggers on the **Checks** run completing on `main` (via
+`workflow_run`, so the checks are not duplicated) and builds the image only
+after they pass:
+
+```bash
+uv run pytest                        # tests (coverage: add --cov=arasaac_mcp)
+uv run ruff check .                  # lint
+uv run ruff format --check .         # formatting (apply with: uv run ruff format .)
+uv run mypy                          # types (arasaac_mcp + scripts)
+uv run python scripts/build_skill.py --check   # generated skill/recipe drift
+```
+
+**Agents: always run `ruff check`, `ruff format --check`, `mypy` and `pytest`
+before finishing a task — but only at the very end.** Do not run them after
+every small edit; they are the final gate, not an inner-loop step.
 
 ### Environment variables
 
@@ -288,9 +311,10 @@ docker run --rm -i arasaac-mcp --transport stdio                                
 docker compose up --build                                                                               # HTTP + output/cache volumes
 ```
 
-CI publishes the same image to GHCR on every non-PR push: tag = the branch name
-(sanitised), plus `latest` on `main` and semver tags on `v*`. The repository is
-private, so pulling needs a token with the `read:packages` scope:
+CI runs the checks first and publishes the same image to GHCR **only on pushes
+to `main`**: tag = the branch name (sanitised) plus `latest`. Pull requests and
+manual runs build the image locally but never push. The repository is private,
+so pulling needs a token with the `read:packages` scope:
 
 ```bash
 echo "$GH_TOKEN" | docker login ghcr.io -u <owner> --password-stdin

@@ -70,9 +70,7 @@ def fetch_pictogram(
             failures.append(f"{candidate}px: empty response")
             continue
         dest.parent.mkdir(parents=True, exist_ok=True)
-        handle, tmp_name = tempfile.mkstemp(
-            dir=dest.parent, prefix=f".{dest.name}.", suffix=".tmp"
-        )
+        handle, tmp_name = tempfile.mkstemp(dir=dest.parent, prefix=f".{dest.name}.", suffix=".tmp")
         tmp_path = Path(tmp_name)
         try:
             with os.fdopen(handle, "wb") as stream:
@@ -82,6 +80,4 @@ def fetch_pictogram(
             tmp_path.unlink(missing_ok=True)
             raise
         return dest
-    raise PictogramFetchError(
-        f"could not download pictogram {pic_id}: " + "; ".join(failures)
-    )
+    raise PictogramFetchError(f"could not download pictogram {pic_id}: " + "; ".join(failures))

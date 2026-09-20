@@ -33,7 +33,7 @@ def view(catalog: Catalog, word: str, output_dir: Path | None) -> list[Any]:
     return [text(caption), text(f"Image: {url}")]
 
 
-def register(server: "FastMCP", context: ServerContext) -> None:
+def register(server: FastMCP, context: ServerContext) -> None:
     """Register ``view_pictogram`` on ``server``."""
 
     @server.tool

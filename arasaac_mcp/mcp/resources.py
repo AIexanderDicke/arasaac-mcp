@@ -14,7 +14,7 @@ from ..skill import recipe_paths, rules_text, skill_markdown
 from ._deps import FastMCP
 
 
-def _register_part(server: "FastMCP", path: Path) -> None:
+def _register_part(server: FastMCP, path: Path) -> None:
     """Register one recipe part as ``arasaac://rules/<stem>``."""
 
     @server.resource(
@@ -28,7 +28,7 @@ def _register_part(server: "FastMCP", path: Path) -> None:
         return path.read_text(encoding="utf-8")
 
 
-def register(server: "FastMCP") -> None:
+def register(server: FastMCP) -> None:
     """Register the prompt and the resources on ``server``."""
 
     @server.prompt(
