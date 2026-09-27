@@ -5,7 +5,7 @@ For each ``<icons-dir>/[id]_[name].png`` the PNG is sent once per language to a
 vision-capable, OpenAI-compatible chat-completions endpoint (OpenRouter by
 default) and the answer is written as JSON to
 ``<out-dir>/<lang>/[id]_description.json`` with the fields ``id``,
-``filename``, ``description``, ``usage`` and ``synonyms``.
+``description``, ``usage`` and ``synonyms``.
 
 The job is cached and resumable: a non-empty file is skipped, so stopping and
 re-running continues where it left off.  Only the standard library is used,
@@ -198,17 +198,16 @@ def _as_text(value: object) -> str:
     return str(value)
 
 
-def build_record(data: dict[str, Any], pic_id: int, filename: str) -> dict[str, Any]:
+def build_record(data: dict[str, Any], pic_id: int) -> dict[str, Any]:
     """Assemble the output record: model content plus the icon reference.
 
-    ``id`` is the ARASAAC pictogram id — stable across languages and used as the
-    primary reference; ``filename`` is the language-specific PNG name. Neither
-    appears in the generated content (the prompt forbids it).
+    ``id`` is the ARASAAC pictogram id — stable across languages and the only
+    reference to the source icon. The generated content never mentions a file
+    name or id (the prompt forbids it).
     """
     synonyms = [str(value).strip() for value in (data.get("synonyms") or []) if str(value).strip()]
     return {
         "id": pic_id,
-        "filename": filename,
         "description": _as_text(data.get("description")),
         "usage": _as_text(data.get("usage") or data.get("verwendung")),
         "synonyms": synonyms,
@@ -387,7 +386,7 @@ def _describe_icon(
                 use_schema=use_schema,
             )
             data = parse_model_response(body)
-            record = build_record(data, target.pic_id, target.filename)
+            record = build_record(data, target.pic_id)
             text = json.dumps(record, ensure_ascii=False, indent=2) + "\n"
             write_text_atomic(target.path, text)
             return "ok"
@@ -397,7 +396,7 @@ def _describe_icon(
                 time.sleep(0.25 * (2**attempt))
 
     print(
-        f"  failed {target.lang} {target.filename}: {last_error}",
+        f"  failed {target.lang} id={target.pic_id}: {last_error}",
         file=sys.stderr,
         flush=True,
     )
