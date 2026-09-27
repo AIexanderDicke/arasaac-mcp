@@ -112,10 +112,10 @@ keywords + tags + `desc`, ranked by FTS5 BM25 and blended with the existing
 A semantic re-rank is an **optional enhancement**, never a dependency, and
 **lexical stays primary** (semantics only re-order the lexical candidates).
 
-- Hard constraint: **OpenCode Zen has no `/embeddings` endpoint** (it returns
-  `404`). Embeddings therefore need a **configurable OpenAI-compatible
-  endpoint** (base URL + model + key via env, e.g. `ARASAAC_EMBED_*`) **or a
-  local model**.
+- Hard constraint: neither the default provider (OpenRouter) nor OpenCode Zen
+  exposes an `/embeddings` endpoint, so embeddings need a **configurable
+  OpenAI-compatible endpoint** (base URL + model + key via env, e.g.
+  `ARASAAC_EMBED_*`) **or a local model**.
 - Offline build: a batch script computes one vector per description (and embeds
   the query at eval/request time) into a compact artifact, stored Python-stdlib
   only (`array`/`struct`, no `numpy` — `numpy` is not a core dependency). Shape:
@@ -160,9 +160,10 @@ vision/chat endpoint and writes one German description per icon.
 | Aspect | Value |
 | --- | --- |
 | Endpoint | OpenAI-compatible chat completions at `{base_url}/chat/completions` |
-| Default base URL | `https://opencode.ai/zen/v1` |
-| Default model | `deepseek-v4-flash-vision-exp` |
-| Key | `--api-key`, else `OPENCODE_API_KEY` |
+| Default base URL | `https://openrouter.ai/api/v1` |
+| Default model | `deepseek/deepseek-v4-flash-vision-exp` |
+| Key | `--api-key`, else `OPENROUTER_API_KEY` |
+| Headers | `User-Agent` (Cloudflare rejects Python's default), plus OpenRouter `HTTP-Referer` / `X-Title` |
 | Image | sent as a **base64 data URL** |
 | Output | `<out-dir>/[id]_[name]_description.<ext>` |
 | Default `--out-dir` | `<icons-dir>/descriptions` |
@@ -184,11 +185,11 @@ Examples:
 uv run python scripts/generate_icon_descriptions.py --dry-run
 
 # Generate into icons/descriptions/, 8 parallel requests
-OPENCODE_API_KEY=… uv run python scripts/generate_icon_descriptions.py --workers 8
+OPENROUTER_API_KEY=… uv run python scripts/generate_icon_descriptions.py --workers 8
 
 # Regenerate a small subset with a different model
 uv run python scripts/generate_icon_descriptions.py \
-  --model deepseek-v4-flash-vision-exp --limit 50 --force
+  --model deepseek/deepseek-v4-flash-vision-exp --limit 50 --force
 ```
 
 ## 4. Invariants
