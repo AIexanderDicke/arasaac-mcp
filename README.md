@@ -27,6 +27,33 @@ docker run --rm -p 8000:8000 -v arasaac-cache:/app/cache -e ARASAAC_TRANSPORT=ht
 ```
 Point the MCP host at `http://localhost:8000/mcp`.
 
+## Optional: generate icon descriptions
+
+`scripts/generate_icon_descriptions.py` asks a vision model to write a detailed
+German description for every pictogram. These descriptions are the basis for a
+better, description-based search (plan:
+[`docs/optimized-search.md`](docs/optimized-search.md)).
+
+- **Output:** `icons/descriptions/[id]_[name]_description.md` — one file per
+  icon (use `--filetype txt` for plain text).
+- **Cached & resumable:** an existing non-empty file is skipped, so you can stop
+  and re-run to continue; `--force` regenerates. `--dry-run` lists the files
+  without calling the API.
+
+```bash
+export OPENROUTER_API_KEY=sk-or-...
+
+# Trial 50 icons (recommended model), then drop --limit for the full set
+uv run python scripts/generate_icon_descriptions.py --limit 50 \
+  --model google/gemini-2.5-flash-lite --workers 4
+```
+
+Model choice: `google/gemini-2.5-flash-lite` is the recommended balance of
+quality and price, `qwen/qwen3.7-flash` is the cheapest solid option, and
+`qwen/qwen3.8-27b:free` is free for a small trial. The script default is
+`deepseek/deepseek-v4-flash-vision-exp`; override it with `--model` (any
+OpenAI-compatible vision endpoint works via `--base-url` / `--api-key`).
+
 ## License & attribution
 
 This project uses the pictograms of [ARASAAC](https://arasaac.org) (the Aragonese
