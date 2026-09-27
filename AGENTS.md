@@ -58,7 +58,7 @@ core.
 | `.github/workflows/docker.yml` | CI: runs the checks, builds the metadata-only image, smoke-tests it, and publishes it to GHCR **only on pushes to `main`**; never downloads the pictogram set |
 | `examples/mcp.json` | MCP host config template (stdio) |
 | `scripts/download_icons.py` | Downloads the pictograms + `metadata_de.json` (stdlib only) |
-| `scripts/generate_icon_descriptions.py` | Batch LLM description generator (stdlib only): one icon PNG → per-icon JSON record (`id`/`filename`/`description`/`usage`/`synonyms`), one file per language |
+| `scripts/generate_icon_descriptions.py` | Batch LLM description generator (stdlib only): one icon PNG → per-icon JSON record (`id`/`description`/`usage`/`synonyms`), one file per language, keyed by ARASAAC id |
 | `assets/fonts/NotoSans-*.ttf` | Umlaut-capable fonts for captions |
 | `icons/` | **PNGs gitignored**, ~338 MB, 13,828 × `[id]_[description].png`; `metadata_de.json` (the ~9 MB word index) **is tracked** |
 | `output/` | **gitignored**, generated sheets |

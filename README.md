@@ -45,7 +45,6 @@ Each record has this structure (content fields are written in `<lang>`):
 ```json
 {
   "id": 2239,
-  "filename": "2239_Biene.png",
   "description": "What is concretely visible in the schematic image.",
   "usage": "When to use it and what it explicitly does NOT stand for.",
   "synonyms": ["bee", "honeybee"]
@@ -55,7 +54,6 @@ Each record has this structure (content fields are written in `<lang>`):
 | Field | Meaning |
 | --- | --- |
 | `id` | ARASAAC pictogram id — the stable, language-independent key (same id across languages). |
-| `filename` | Language-specific PNG file name; kept for traceability. |
 | `description` | What is visible in the image. |
 | `usage` | Context and disambiguation (when to use it, what it does not mean). |
 | `synonyms` | Fitting words/synonyms in the record's language. |
