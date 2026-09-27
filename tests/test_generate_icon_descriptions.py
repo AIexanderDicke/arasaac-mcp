@@ -109,9 +109,10 @@ def test_build_prompt_mentions_schematic_and_fields(gen: ModuleType) -> None:
     assert "file name" in prompt  # explicitly forbids filename references
 
 
-def test_build_record_has_filename_and_content(gen: ModuleType) -> None:
-    record = gen.build_record(RECORD, "2239_Biene.png")
+def test_build_record_has_id_and_filename(gen: ModuleType) -> None:
+    record = gen.build_record(RECORD, 2239, "2239_Biene.png")
     assert record == {
+        "id": 2239,
         "filename": "2239_Biene.png",
         "description": "Eine Biene sammelt Nektar.",
         "usage": "Für das Insekt Biene; nicht für andere Insekten.",
@@ -121,7 +122,7 @@ def test_build_record_has_filename_and_content(gen: ModuleType) -> None:
 
 
 def test_build_record_accepts_verwendung_alias(gen: ModuleType) -> None:
-    record = gen.build_record({"description": "x", "verwendung": "y", "synonyms": []}, "1_A.png")
+    record = gen.build_record({"description": "x", "verwendung": "y", "synonyms": []}, 1, "1_A.png")
     assert record["usage"] == "y"
 
 
@@ -255,6 +256,7 @@ def test_main_writes_json_and_second_run_skips(
     assert gen.main(argv) == 0
     out = icons / "descriptions" / "en"
     record = json.loads((out / "2239_Biene_description.json").read_text(encoding="utf-8"))
+    assert record["id"] == 2239
     assert record["filename"] == "2239_Biene.png"
     assert record["description"] == "Eine Biene sammelt Nektar."
     assert (out / "10147_Toilettenpapier_abreißen_description.json").is_file()
