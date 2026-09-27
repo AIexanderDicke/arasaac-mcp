@@ -87,13 +87,9 @@ def test_parse_icon_filename(gen: ModuleType) -> None:
     assert gen.parse_icon_filename("metadata_de.json") is None
 
 
-def test_target_path_uses_lang_and_json(gen: ModuleType, tmp_path: Path) -> None:
-    assert gen.target_path(tmp_path, "de", 2239, "Biene") == (
-        tmp_path / "de" / "2239_Biene_description.json"
-    )
-    assert gen.target_path(tmp_path, "en", 2239, "Biene") == (
-        tmp_path / "en" / "2239_Biene_description.json"
-    )
+def test_target_path_uses_lang_and_id(gen: ModuleType, tmp_path: Path) -> None:
+    assert gen.target_path(tmp_path, "de", 2239) == tmp_path / "de" / "2239_description.json"
+    assert gen.target_path(tmp_path, "en", 2239) == tmp_path / "en" / "2239_description.json"
 
 
 # 2 -------------------------------------------------------------------------
@@ -223,7 +219,7 @@ def test_collect_targets_skip_force_limit_langs(gen: ModuleType, tmp_path: Path)
     icons = _write_icons(tmp_path)
     out = icons / "descriptions"
     (out / "de").mkdir(parents=True)
-    (out / "de" / "2239_Biene_description.json").write_text("{}", encoding="utf-8")
+    (out / "de" / "2239_description.json").write_text("{}", encoding="utf-8")
 
     ids = [(t.pic_id, t.lang) for t in gen.collect_targets(icons, out, ["de"])]
     assert ids == [(3151, "de"), (10147, "de")]
@@ -255,11 +251,11 @@ def test_main_writes_json_and_second_run_skips(
 
     assert gen.main(argv) == 0
     out = icons / "descriptions" / "en"
-    record = json.loads((out / "2239_Biene_description.json").read_text(encoding="utf-8"))
+    record = json.loads((out / "2239_description.json").read_text(encoding="utf-8"))
     assert record["id"] == 2239
     assert record["filename"] == "2239_Biene.png"
     assert record["description"] == "Eine Biene sammelt Nektar."
-    assert (out / "10147_Toilettenpapier_abreißen_description.json").is_file()
+    assert (out / "10147_description.json").is_file()
     assert len(calls) == 3
 
     calls.clear()
@@ -281,8 +277,8 @@ def test_main_generates_multiple_languages(
     argv = ["--icons-dir", str(icons), "--api-key", "test", "--lang", "de", "en"]
 
     assert gen.main(argv) == 0
-    assert (icons / "descriptions" / "de" / "2239_Biene_description.json").is_file()
-    assert (icons / "descriptions" / "en" / "2239_Biene_description.json").is_file()
+    assert (icons / "descriptions" / "de" / "2239_description.json").is_file()
+    assert (icons / "descriptions" / "en" / "2239_description.json").is_file()
     assert len(calls) == 6
 
 
@@ -298,7 +294,7 @@ def test_main_reports_failure_without_partial_file(
     monkeypatch.setattr(gen, "request_description", fake)
     rc = gen.main(["--icons-dir", str(icons), "--api-key", "x", "--workers", "1", "--retries", "0"])
     assert rc == 1
-    assert not (icons / "descriptions" / "en" / "2239_Biene_description.json").exists()
+    assert not (icons / "descriptions" / "en" / "2239_description.json").exists()
 
 
 # 7 -------------------------------------------------------------------------

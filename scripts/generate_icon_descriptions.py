@@ -4,8 +4,8 @@
 For each ``<icons-dir>/[id]_[name].png`` the PNG is sent once per language to a
 vision-capable, OpenAI-compatible chat-completions endpoint (OpenRouter by
 default) and the answer is written as JSON to
-``<out-dir>/<lang>/[id]_[name]_description.json`` with the fields ``filename``,
-``description``, ``usage`` and ``synonyms``.
+``<out-dir>/<lang>/[id]_description.json`` with the fields ``id``,
+``filename``, ``description``, ``usage`` and ``synonyms``.
 
 The job is cached and resumable: a non-empty file is skipped, so stopping and
 re-running continues where it left off.  Only the standard library is used,
@@ -95,9 +95,13 @@ def parse_icon_filename(filename: str) -> tuple[int, str] | None:
     return int(match.group(1)), match.group(2)
 
 
-def target_path(out_dir: Path, lang: str, pic_id: int, name: str) -> Path:
-    """Description file for one icon: ``<out>/<lang>/[id]_[name]_description.json``."""
-    return Path(out_dir) / lang / f"{pic_id}_{name}_description.json"
+def target_path(out_dir: Path, lang: str, pic_id: int) -> Path:
+    """Description file for one icon: ``<out>/<lang>/<id>_description.json``.
+
+    The id (not the language-specific name) makes the file name stable across
+    languages.
+    """
+    return Path(out_dir) / lang / f"{pic_id}_description.json"
 
 
 def load_metadata(icons_dir: Path) -> dict[int, dict[str, Any]]:
@@ -341,7 +345,7 @@ def collect_targets(
             continue
         icon_targets: list[IconTarget] = []
         for lang in langs:
-            path = target_path(out_dir, lang, pic_id, name)
+            path = target_path(out_dir, lang, pic_id)
             if not force and path.is_file() and path.stat().st_size > 0:
                 continue
             icon_targets.append(IconTarget(pic_id, name, filename, lang, png, path))
