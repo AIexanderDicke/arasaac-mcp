@@ -144,6 +144,34 @@ def test_parse_model_response_raises_on_invalid(gen: ModuleType) -> None:
         gen.parse_model_response("not json at all")
 
 
+def test_request_description_sets_user_agent(
+    gen: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _Response:
+        def __enter__(self) -> _Response:
+            return self
+
+        def __exit__(self, *args: object) -> bool:
+            return False
+
+        def read(self) -> bytes:
+            return b"{}"
+
+    def fake_urlopen(request: object, timeout: float = 0) -> _Response:
+        captured["request"] = request
+        return _Response()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    gen.request_description(
+        b"png", "prompt", model="m", base_url="https://example.test", api_key="k", timeout=1
+    )
+
+    user_agent = captured["request"].get_header("User-agent")  # type: ignore[attr-defined]
+    assert user_agent and "arasaac" in user_agent.lower()
+
+
 # 4 -------------------------------------------------------------------------
 def test_collect_targets_skip_force_limit(gen: ModuleType, tmp_path: Path) -> None:
     icons = _write_icons(tmp_path)

@@ -29,6 +29,9 @@ from typing import Any, NamedTuple
 
 DEFAULT_BASE_URL = "https://opencode.ai/zen/v1"
 DEFAULT_MODEL = "deepseek-v4-flash-vision-exp"
+#: Cloudflare in front of the endpoint blocks Python's default User-Agent
+#: (error 1010), so identify the tool explicitly.
+USER_AGENT = "arasaac-mcp/0.1 (+https://github.com/aiexanderdicke/arasaac)"
 
 LANGUAGE_NAMES: dict[str, str] = {
     "de": "Deutsch",
@@ -271,6 +274,7 @@ def request_description(
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}",
+            "User-Agent": USER_AGENT,
         },
         method="POST",
     )
