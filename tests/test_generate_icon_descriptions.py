@@ -103,6 +103,9 @@ def test_build_prompt_mentions_schematic_and_fields(gen: ModuleType) -> None:
     for field in ("description", "usage", "synonyms"):
         assert field in prompt
     assert "file name" in prompt  # explicitly forbids filename references
+    # discourage the boilerplate openings and the "how it is drawn" description
+    assert "do not start with boilerplate" in prompt
+    assert "WHAT is depicted" in prompt
 
 
 def test_build_record_has_id_and_content(gen: ModuleType) -> None:
