@@ -191,15 +191,25 @@ The three content fields are written in the language of the containing directory
 No file name is referenced anywhere. The model never sees the id or a file name.
 Consumers key on `id`.
 
+Provider presets (`--endpoint`):
+
+| `--endpoint` | Base URL | Key | Default model | `json_schema` |
+| --- | --- | --- | --- | --- |
+| `openrouter` (default) | `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY` | `deepseek/deepseek-v4-flash-vision-exp` | yes |
+| `opencode-go` | `https://opencode.ai/zen/go/v1` | `OPENCODE_API_KEY` | `deepseek-v4-flash-vision-exp` | no |
+| `opencode-zen` | `https://opencode.ai/zen/v1` | `OPENCODE_API_KEY` | `deepseek-v4-flash-vision-exp` | yes |
+
+`--base-url`, `--model` and `--api-key` still override the preset. OpenCode Go
+requires the `x-opencode-session` header (sent automatically; override with
+`--session-id`) and rejects `json_schema`, so its content fields are parsed from
+the model's plain JSON answer.
+
 | Aspect | Value |
 | --- | --- |
 | Endpoint | OpenAI-compatible chat completions at `{base_url}/chat/completions` |
-| Default base URL | `https://openrouter.ai/api/v1` |
-| Default model | `deepseek/deepseek-v4-flash-vision-exp` |
-| Key | `--api-key`, else `OPENROUTER_API_KEY` |
-| Headers | `User-Agent` (Cloudflare rejects Python's default), plus OpenRouter `HTTP-Referer` / `X-Title` |
+| Headers | `User-Agent` (Cloudflare rejects Python's default), OpenRouter `HTTP-Referer` / `X-Title`, and `x-opencode-session` for Go |
 | Image | sent as a **base64 data URL** |
-| Structured output | `response_format` `json_schema` (`--no-json-schema` for models without strict schema support) |
+| Structured output | `response_format` `json_schema` where supported; `--no-json-schema` forces plain JSON |
 | Output | `<out-dir>/<lang>/[id]_description.json` |
 | Default `--out-dir` | `<icons-dir>/descriptions` |
 | Languages | `--lang en de` (default `en`); `--limit` counts icons |
@@ -207,8 +217,9 @@ Consumers key on `id`.
 | `--force` | regenerate even when the file exists |
 | Writes | **atomic** (temp file + `os.replace`, like `fetch.py`) |
 
-Flags: `--icons-dir --out-dir --lang --model --base-url --api-key --workers
---limit --timeout --retries --force --dry-run --no-json-schema`.
+Flags: `--endpoint --icons-dir --out-dir --lang --model --base-url --api-key
+--session-id --workers --limit --timeout --retries --force --dry-run
+--no-json-schema`.
 
 Exit codes: **0** success, **1** one or more failures, **2** no API key,
 **130** interrupted (`SIGINT`).
@@ -219,12 +230,13 @@ Examples:
 # Plan only: list what would be generated
 uv run python scripts/generate_icon_descriptions.py --dry-run
 
-# Generate English (default) into icons/descriptions/en/, 8 parallel requests
-OPENROUTER_API_KEY=… uv run python scripts/generate_icon_descriptions.py --workers 8
+# OpenCode Go (same OPENCODE_API_KEY), English by default
+uv run python scripts/generate_icon_descriptions.py \
+  --endpoint opencode-go --limit 50 --workers 4
 
-# Generate English + German into icons/descriptions/{en,de}/
+# OpenRouter, English + German into icons/descriptions/{en,de}/
 OPENROUTER_API_KEY=… uv run python scripts/generate_icon_descriptions.py \
-  --lang en de --workers 8
+  --endpoint openrouter --lang en de --workers 8
 
 # Regenerate a small subset with a different model
 uv run python scripts/generate_icon_descriptions.py \

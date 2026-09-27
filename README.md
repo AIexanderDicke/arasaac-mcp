@@ -58,19 +58,25 @@ Each record has this structure (content fields are written in `<lang>`):
 | `usage` | Which concept it represents, when to use it, and what it does not mean — without boilerplate openings. |
 | `synonyms` | Fitting words/synonyms in the record's language. |
 
-```bash
-export OPENROUTER_API_KEY=sk-or-...
+Provider is selected with `--endpoint` (`openrouter` default, or `opencode-go`
+/ `opencode-zen`, which use `OPENCODE_API_KEY`):
 
-# Trial 50 icons (English by default), then drop --limit for the full set
+```bash
+# OpenCode Go, English by default
+uv run python scripts/generate_icon_descriptions.py \
+  --endpoint opencode-go --limit 50 --workers 4
+
+# OpenRouter
+export OPENROUTER_API_KEY=sk-or-...
 uv run python scripts/generate_icon_descriptions.py --limit 50 \
   --model google/gemini-2.5-flash-lite --workers 4
 ```
 
-Model choice: `google/gemini-2.5-flash-lite` is the recommended balance of
-quality and price, `qwen/qwen3.7-flash` is the cheapest solid option, and
-`qwen/qwen3.8-27b:free` is free for a small trial. The script default is
-`deepseek/deepseek-v4-flash-vision-exp`; override it with `--model` (any
-OpenAI-compatible vision endpoint works via `--base-url` / `--api-key`).
+Model choice — OpenCode Go: the included `deepseek-v4-flash-vision-exp` (a
+dedicated vision model) or the free `space-bunny-free`; OpenRouter:
+`google/gemini-2.5-flash-lite` (recommended balance), `qwen/qwen3.7-flash`
+(cheapest solid), `qwen/qwen3.8-27b:free` (free trial). Any model still
+overridable with `--model`.
 
 ## License & attribution
 
