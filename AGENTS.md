@@ -58,11 +58,13 @@ core.
 | `.github/workflows/docker.yml` | CI: runs the checks, builds the metadata-only image, smoke-tests it, and publishes it to GHCR **only on pushes to `main`**; never downloads the pictogram set |
 | `examples/mcp.json` | MCP host config template (stdio) |
 | `scripts/download_icons.py` | Downloads the pictograms + `metadata_de.json` (stdlib only) |
+| `scripts/generate_icon_descriptions.py` | Batch LLM description generator (stdlib only): one icon PNG → per-icon German description file |
 | `assets/fonts/NotoSans-*.ttf` | Umlaut-capable fonts for captions |
 | `icons/` | **PNGs gitignored**, ~338 MB, 13,828 × `[id]_[description].png`; `metadata_de.json` (the ~9 MB word index) **is tracked** |
 | `output/` | **gitignored**, generated sheets |
 | `scripts/prompt.md`, `README.md`, `docs/` | Docs |
 | `docs/multilingual.md` | Plan: supporting the 12 well-covered ARASAAC languages (per-request `lang` param, design decisions, phases, per-language invariants) |
+| `docs/optimized-search.md` | Plan: LLM-generated per-icon German descriptions + a retrieval layer (SQLite FTS5 hybrid lexical search, optional embeddings) |
 | `examples/` | Sample layout JSON: `stundenplan.json` (grid), `karten.json` (cards + arrow) |
 
 ## Setup
