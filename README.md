@@ -30,23 +30,40 @@ Point the MCP host at `http://localhost:8000/mcp`.
 ## Optional: generate icon descriptions
 
 `scripts/generate_icon_descriptions.py` asks a vision model to write a structured
-description for every pictogram — `description` (what is visible), `usage` (when
-to use it and what it does *not* stand for) and `synonyms`. These descriptions
-are the basis for a better, description-based search (plan:
+description for every pictogram. These descriptions are the basis for a better,
+description-based search (plan:
 [`docs/optimized-search.md`](docs/optimized-search.md)).
 
 - **Output:** `icons/descriptions/<lang>/[id]_[name]_description.json` — one
-  JSON file per icon and language (default `de`; add English with `--lang de en`).
+  JSON file per icon and language (default `en`; add German with `--lang en de`).
 - **Cached & resumable:** an existing non-empty file is skipped, so you can stop
   and re-run to continue; `--force` regenerates. `--dry-run` lists the files
   without calling the API.
 
+Each record has this structure (content fields are written in `<lang>`):
+
+```json
+{
+  "filename": "2239_Biene.png",
+  "description": "What is concretely visible in the schematic image.",
+  "usage": "When to use it and what it explicitly does NOT stand for.",
+  "synonyms": ["bee", "honeybee"]
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `filename` | Source ARASAAC PNG file name — the only place a file name/id appears; maps the record back to the pictogram. |
+| `description` | What is visible in the image. |
+| `usage` | Context and disambiguation (when to use it, what it does not mean). |
+| `synonyms` | Fitting words/synonyms in the record's language. |
+
 ```bash
 export OPENROUTER_API_KEY=sk-or-...
 
-# Trial 50 icons in German + English, then drop --limit for the full set
+# Trial 50 icons (English by default), then drop --limit for the full set
 uv run python scripts/generate_icon_descriptions.py --limit 50 \
-  --lang de en --model google/gemini-2.5-flash-lite --workers 4
+  --model google/gemini-2.5-flash-lite --workers 4
 ```
 
 Model choice: `google/gemini-2.5-flash-lite` is the recommended balance of

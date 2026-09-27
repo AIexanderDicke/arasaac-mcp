@@ -161,23 +161,33 @@ A semantic re-rank is an **optional enhancement**, never a dependency, and
 `scripts/generate_icon_descriptions.py` — batch LLM description generator
 (**stdlib only**). It sends each icon image to an OpenAI-compatible
 vision/chat endpoint and writes one structured JSON record per icon **and
-language** (default `de`; add `en` for the English variant). The English prompt
+language** (default `en`; add German with `--lang en de`). The English prompt
 states that a pictogram is a schematic representation and forbids filename/ID
-references in the content.
+references in the content; a `json_schema` `response_format` enforces the shape.
 
-The record is:
+### Record structure
+
+One file per icon and language, `<lang>/[id]_[name]_description.json`:
 
 ```json
 {
   "filename": "2239_Biene.png",
-  "description": "what is concretely visible in the image",
-  "usage": "when to use it and what it does NOT stand for",
-  "synonyms": ["...", "..."]
+  "description": "A schematic bee with black-and-yellow stripes and wings.",
+  "usage": "Use for the insect 'bee'. Not for other insects; not for 'honey'.",
+  "synonyms": ["bee", "honeybee"]
 }
 ```
 
-`filename` maps the record back to the PNG; it is the only place the ARASAAC
-file name appears.
+| Field | Type | Written by | Meaning |
+| --- | --- | --- | --- |
+| `filename` | string | script | The source ARASAAC PNG file name (`[id]_[name].png`) — the only place the file name/id appears; maps the record back to the pictogram. |
+| `description` | string | model | What is concretely visible in the schematic image. |
+| `usage` | string | model | When/where to use the pictogram and what it explicitly does **not** stand for (e.g. person vs. object, direction vs. place), for disambiguation. |
+| `synonyms` | string[] | model | Fitting words/synonyms in the record's language. |
+
+The three content fields are written in the language of the containing directory
+(`<lang>/`); the JSON keys stay English so consumers are language-independent.
+The model never sees the file name or an id.
 
 | Aspect | Value |
 | --- | --- |
@@ -190,7 +200,7 @@ file name appears.
 | Structured output | `response_format` `json_schema` (`--no-json-schema` for models without strict schema support) |
 | Output | `<out-dir>/<lang>/[id]_[name]_description.json` |
 | Default `--out-dir` | `<icons-dir>/descriptions` |
-| Languages | `--lang de en` (default `de`); `--limit` counts icons |
+| Languages | `--lang en de` (default `en`); `--limit` counts icons |
 | Cache | an existing **non-empty** file is a cache hit (stop/resume-safe) |
 | `--force` | regenerate even when the file exists |
 | Writes | **atomic** (temp file + `os.replace`, like `fetch.py`) |
@@ -207,9 +217,12 @@ Examples:
 # Plan only: list what would be generated
 uv run python scripts/generate_icon_descriptions.py --dry-run
 
-# Generate German + English into icons/descriptions/, 8 parallel requests
+# Generate English (default) into icons/descriptions/en/, 8 parallel requests
+OPENROUTER_API_KEY=… uv run python scripts/generate_icon_descriptions.py --workers 8
+
+# Generate English + German into icons/descriptions/{en,de}/
 OPENROUTER_API_KEY=… uv run python scripts/generate_icon_descriptions.py \
-  --lang de en --workers 8
+  --lang en de --workers 8
 
 # Regenerate a small subset with a different model
 uv run python scripts/generate_icon_descriptions.py \
