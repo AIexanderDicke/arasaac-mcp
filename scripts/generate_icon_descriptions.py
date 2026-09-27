@@ -2,7 +2,7 @@
 """Generate a detailed German description for every ARASAAC pictogram.
 
 For each ``<icons-dir>/[id]_[name].png`` the PNG is sent once to a
-vision-capable, OpenAI-compatible chat-completions endpoint (OpenCode Zen by
+vision-capable, OpenAI-compatible chat-completions endpoint (OpenRouter by
 default) and the structured answer is written to
 ``<out-dir>/[id]_[name]_description.<md|txt>``.
 
@@ -27,11 +27,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, NamedTuple
 
-DEFAULT_BASE_URL = "https://opencode.ai/zen/v1"
-DEFAULT_MODEL = "deepseek-v4-flash-vision-exp"
-#: Cloudflare in front of the endpoint blocks Python's default User-Agent
+DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
+DEFAULT_MODEL = "deepseek/deepseek-v4-flash-vision-exp"
+DEFAULT_API_KEY_ENV = "OPENROUTER_API_KEY"
+#: Cloudflare in front of some endpoints blocks Python's default User-Agent
 #: (error 1010), so identify the tool explicitly.
 USER_AGENT = "arasaac-mcp/0.1 (+https://github.com/aiexanderdicke/arasaac)"
+#: Optional OpenRouter attribution headers.
+HTTP_REFERER = "https://github.com/aiexanderdicke/arasaac"
+APP_TITLE = "arasaac-mcp"
 
 LANGUAGE_NAMES: dict[str, str] = {
     "de": "Deutsch",
@@ -275,6 +279,8 @@ def request_description(
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}",
             "User-Agent": USER_AGENT,
+            "HTTP-Referer": HTTP_REFERER,
+            "X-Title": APP_TITLE,
         },
         method="POST",
     )
@@ -388,7 +394,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--lang", default="de")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
-    parser.add_argument("--api-key", default=os.environ.get("OPENCODE_API_KEY", ""))
+    parser.add_argument("--api-key", default=os.environ.get(DEFAULT_API_KEY_ENV, ""))
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--timeout", type=float, default=120.0)
@@ -416,7 +422,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if not args.api_key:
         print(
-            "error: no API key (set OPENCODE_API_KEY or pass --api-key)",
+            f"error: no API key (set {DEFAULT_API_KEY_ENV} or pass --api-key)",
             file=sys.stderr,
             flush=True,
         )

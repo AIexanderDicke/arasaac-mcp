@@ -144,7 +144,7 @@ def test_parse_model_response_raises_on_invalid(gen: ModuleType) -> None:
         gen.parse_model_response("not json at all")
 
 
-def test_request_description_sets_user_agent(
+def test_request_description_sets_headers_and_endpoint(
     gen: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     captured: dict[str, object] = {}
@@ -165,11 +165,14 @@ def test_request_description_sets_user_agent(
 
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
     gen.request_description(
-        b"png", "prompt", model="m", base_url="https://example.test", api_key="k", timeout=1
+        b"png", "prompt", model="m", base_url="https://openrouter.ai/api/v1", api_key="k", timeout=1
     )
 
-    user_agent = captured["request"].get_header("User-agent")  # type: ignore[attr-defined]
+    request = captured["request"]
+    assert request.full_url == "https://openrouter.ai/api/v1/chat/completions"  # type: ignore[attr-defined]
+    user_agent = request.get_header("User-agent")  # type: ignore[attr-defined]
     assert user_agent and "arasaac" in user_agent.lower()
+    assert request.get_header("X-title") == gen.APP_TITLE  # type: ignore[attr-defined]
 
 
 # 4 -------------------------------------------------------------------------
@@ -251,5 +254,5 @@ def test_missing_api_key_returns_2(
     gen: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     icons = _write_icons(tmp_path)
-    monkeypatch.delenv("OPENCODE_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     assert gen.main(["--icons-dir", str(icons), "--api-key", ""]) == 2
