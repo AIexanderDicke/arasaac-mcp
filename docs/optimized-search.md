@@ -162,8 +162,9 @@ A semantic re-rank is an **optional enhancement**, never a dependency, and
 (**stdlib only**). It sends each icon image to an OpenAI-compatible
 vision/chat endpoint and writes one structured JSON record per icon **and
 language** (default `en`; add German with `--lang en de`). The English prompt
-states that a pictogram is a schematic representation and forbids filename/ID
-references in the content; a `json_schema` `response_format` enforces the shape.
+asks for what is depicted (not how it is drawn) and for the usage without
+boilerplate openings, forbids filename/ID references in the content, and a
+`json_schema` `response_format` enforces the shape.
 
 ### Record structure
 
@@ -172,8 +173,8 @@ One file per icon and language, `<lang>/[id]_description.json`:
 ```json
 {
   "id": 2239,
-  "description": "A schematic bee with black-and-yellow stripes and wings.",
-  "usage": "Use for the insect 'bee'. Not for other insects; not for 'honey'.",
+  "description": "A bee, shown from the side.",
+  "usage": "Represents the insect bee (animals, nature, apiculture); not other insects and not honey.",
   "synonyms": ["bee", "honeybee"]
 }
 ```
@@ -181,8 +182,8 @@ One file per icon and language, `<lang>/[id]_description.json`:
 | Field | Type | Written by | Meaning |
 | --- | --- | --- | --- |
 | `id` | number | script | ARASAAC pictogram id — the **stable, language-independent key** and the only reference to the icon. Verified: `de`, `en` and `es` expose the exact same 13,827 ids, and the PNG URL (`pictograms/<id>/<id>_<size>.png`) depends only on the id. |
-| `description` | string | model | What is concretely visible in the schematic image. |
-| `usage` | string | model | When/where to use the pictogram and what it explicitly does **not** stand for (e.g. person vs. object, direction vs. place), for disambiguation. |
+| `description` | string | model | What is depicted, as a reader would name the subject/scene — one concise sentence (e.g. `"A sidewalk of a street viewed from a slightly elevated angle."`). Not a breakdown of how the drawing is composed. |
+| `usage` | string | model | Which concept the icon represents and when to use it, including what it explicitly does **not** stand for (e.g. person vs. object, direction vs. place). Stated directly, without `"This pictogram is used to"`-style openings. |
 | `synonyms` | string[] | model | Fitting words/synonyms in the record's language. |
 
 The three content fields are written in the language of the containing directory

@@ -45,8 +45,8 @@ Each record has this structure (content fields are written in `<lang>`):
 ```json
 {
   "id": 2239,
-  "description": "What is concretely visible in the schematic image.",
-  "usage": "When to use it and what it explicitly does NOT stand for.",
+  "description": "A bee, shown from the side.",
+  "usage": "Represents the insect bee (animals, nature, apiculture); not other insects and not honey.",
   "synonyms": ["bee", "honeybee"]
 }
 ```
@@ -54,8 +54,8 @@ Each record has this structure (content fields are written in `<lang>`):
 | Field | Meaning |
 | --- | --- |
 | `id` | ARASAAC pictogram id — the stable, language-independent key (same id across languages). |
-| `description` | What is visible in the image. |
-| `usage` | Context and disambiguation (when to use it, what it does not mean). |
+| `description` | What is depicted, as you would name the subject/scene (not how the drawing is composed). |
+| `usage` | Which concept it represents, when to use it, and what it does not mean — without boilerplate openings. |
 | `synonyms` | Fitting words/synonyms in the record's language. |
 
 ```bash
