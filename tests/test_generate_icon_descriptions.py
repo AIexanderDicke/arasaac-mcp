@@ -8,7 +8,9 @@ not an importable package (same pattern as ``test_download_icons.py``).
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
+import urllib.error
 from pathlib import Path
 from types import ModuleType
 
@@ -261,6 +263,46 @@ def test_endpoint_presets(gen: ModuleType) -> None:
     assert default.base_url == "https://openrouter.ai/api/v1"
     assert default.api_key_env == "OPENROUTER_API_KEY"
     assert default.use_schema is True
+
+
+def test_describe_icon_forwards_session_and_schema(
+    gen: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    png = tmp_path / "2239_Biene.png"
+    png.write_bytes(b"png")
+    target = gen.IconTarget(
+        2239, "Biene", "2239_Biene.png", "en", png, tmp_path / "en" / "2239_description.json"
+    )
+    captured: dict[str, object] = {}
+
+    def fake(image_bytes: bytes, prompt: str, **kwargs: object) -> str:
+        captured.update(kwargs)
+        return _fake_body()
+
+    monkeypatch.setattr(gen, "request_description", fake)
+    result = gen._describe_icon(
+        target,
+        metadata={},
+        model="m",
+        base_url="u",
+        api_key="k",
+        timeout=1,
+        retries=0,
+        use_schema=False,
+        session_id="sess-1",
+    )
+    assert result == "ok"
+    assert captured["session_id"] == "sess-1"
+    assert captured["use_schema"] is False
+
+
+def test_error_message_includes_http_body(gen: ModuleType) -> None:
+    exc = urllib.error.HTTPError(
+        "https://x", 400, "Bad Request", None, io.BytesIO(b'{"error":"boom"}')
+    )
+    message = gen._error_message(exc)
+    assert "400" in message
+    assert "boom" in message
 
 
 # 4 -------------------------------------------------------------------------

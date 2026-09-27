@@ -28,6 +28,7 @@ import re
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -410,6 +411,17 @@ def collect_targets(
     return targets
 
 
+def _error_message(exc: BaseException | None) -> str:
+    """Readable one-line error, including the HTTP response body when present."""
+    if isinstance(exc, urllib.error.HTTPError):
+        try:
+            detail = exc.read().decode("utf-8", "replace").strip()
+        except Exception:
+            detail = ""
+        return f"HTTP {exc.code}: {detail[:300]}" if detail else f"HTTP {exc.code}: {exc.reason}"
+    return f"{type(exc).__name__}: {exc}"
+
+
 def _describe_icon(
     target: IconTarget,
     *,
@@ -438,6 +450,7 @@ def _describe_icon(
                 api_key=api_key,
                 timeout=timeout,
                 use_schema=use_schema,
+                session_id=session_id,
             )
             data = parse_model_response(body)
             record = build_record(data, target.pic_id)
@@ -450,7 +463,7 @@ def _describe_icon(
                 time.sleep(0.25 * (2**attempt))
 
     print(
-        f"  failed {target.lang} id={target.pic_id}: {last_error}",
+        f"  failed {target.lang} id={target.pic_id}: {_error_message(last_error)}",
         file=sys.stderr,
         flush=True,
     )
