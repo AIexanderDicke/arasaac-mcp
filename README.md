@@ -29,13 +29,14 @@ Point the MCP host at `http://localhost:8000/mcp`.
 
 ## Optional: generate icon descriptions
 
-`scripts/generate_icon_descriptions.py` asks a vision model to write a detailed
-German description for every pictogram. These descriptions are the basis for a
-better, description-based search (plan:
+`scripts/generate_icon_descriptions.py` asks a vision model to write a structured
+description for every pictogram — `description` (what is visible), `usage` (when
+to use it and what it does *not* stand for) and `synonyms`. These descriptions
+are the basis for a better, description-based search (plan:
 [`docs/optimized-search.md`](docs/optimized-search.md)).
 
-- **Output:** `icons/descriptions/[id]_[name]_description.md` — one file per
-  icon (use `--filetype txt` for plain text).
+- **Output:** `icons/descriptions/<lang>/[id]_[name]_description.json` — one
+  JSON file per icon and language (default `de`; add English with `--lang de en`).
 - **Cached & resumable:** an existing non-empty file is skipped, so you can stop
   and re-run to continue; `--force` regenerates. `--dry-run` lists the files
   without calling the API.
@@ -43,9 +44,9 @@ better, description-based search (plan:
 ```bash
 export OPENROUTER_API_KEY=sk-or-...
 
-# Trial 50 icons (recommended model), then drop --limit for the full set
+# Trial 50 icons in German + English, then drop --limit for the full set
 uv run python scripts/generate_icon_descriptions.py --limit 50 \
-  --model google/gemini-2.5-flash-lite --workers 4
+  --lang de en --model google/gemini-2.5-flash-lite --workers 4
 ```
 
 Model choice: `google/gemini-2.5-flash-lite` is the recommended balance of

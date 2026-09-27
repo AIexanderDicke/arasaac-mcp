@@ -1,9 +1,9 @@
 # Optimized search — LLM icon descriptions + retrieval
 
-*Giving every pictogram a rich, LLM-written German description and searching
-over it — so the word layer [`arasaac_mcp/catalog.py`](../arasaac_mcp/catalog.py)
-finds the right icon from a natural request instead of from terse ARASAAC
-keywords alone.*
+*Giving every pictogram a rich, LLM-written structured description and
+searching over it — so the word layer
+[`arasaac_mcp/catalog.py`](../arasaac_mcp/catalog.py) finds the right icon from a
+natural request instead of from terse ARASAAC keywords alone.*
 
 ## 1. Goal and problem
 
@@ -26,7 +26,8 @@ because nothing but the keyword strings is available.
 vision-language model) plus a **retrieval layer over those descriptions**, while
 every existing invariant of the word layer holds unchanged. Concretely:
 
-1. Each pictogram gets a detailed German description in a per-icon file.
+1. Each pictogram gets a structured JSON description (per language) in a
+   per-icon file.
 2. `catalog.py` searches those descriptions in addition to the existing
    keywords/tags, ranking them with a hybrid lexical score.
 3. Optionally, an offline semantic embedding re-ranks the lexical candidates.
@@ -46,33 +47,37 @@ Phase 1 is being implemented.
 ### Phase 1 — Generate descriptions (implemented)
 
 A stdlib-only batch script sends each icon PNG to a vision model and writes a
-German description to `<out-dir>/[id]_[name]_description.<ext>`. Full interface
-in §3.
+structured JSON record, one file per icon and language, to
+`<out-dir>/<lang>/[id]_[name]_description.json`. Full interface in §3.
 
 - Files: `scripts/generate_icon_descriptions.py` (new).
 - Tests: unit tests over a mocked/injected HTTP layer (no network): filename
   derivation, cache-hit skipping, `--force`, atomic write, exit codes, missing
-  API key.
-- Exit criteria: a dry run plans one output per `[id]_[name].png`; a rerun skips
-  existing non-empty files; interrupting and resuming produces the full set.
+  API key, multi-language output.
+- Exit criteria: a dry run plans one output per `[id]_[name].png` and language;
+  a rerun skips existing non-empty files; interrupting and resuming produces the
+  full set.
 
 ### Phase 2 — Load/index descriptions
 
 A small, Pillow-free and network-free module turns the description directory
-into an in-memory `pic_id` → text mapping.
+into an in-memory `pic_id` → record mapping, per language.
 
 - Files: `arasaac_mcp/descriptions.py` (new).
 - API sketch (frozen defaults keep callers valid):
-  - `load_descriptions(descriptions_dir: Path) -> dict[int, str]` keyed by the
-    numeric `pic_id`, skipping missing/empty files.
-  - `Descriptions.for_pictogram(pic: Pictogram) -> str | None` resolves by
+  - `load_descriptions(descriptions_dir: Path, lang: str) -> dict[int, dict]`
+    keyed by the numeric `pic_id`, skipping missing/empty files.
+  - `Descriptions.for_pictogram(pic: Pictogram) -> dict | None` resolves by
     `pic.pic_id` (falling back to the file stem), or `None`.
+  - The record is the JSON object: `filename`, `description`, `usage`,
+    `synonyms` (see §3). `filename` is used only to map back to the PNG; the
+    model never sees it and never writes it into the content fields.
 - Behaviour: **absent-safe** — a missing directory, missing entry or empty file
   yields an empty mapping, never an error. Reads text only; no PNG, no network.
-  The directory defaults to `<icons-dir>/descriptions` (optionally
+  The directory defaults to `<icons-dir>/descriptions/<lang>` (optionally
   `ARASAAC_DESCRIPTIONS_DIR`), discovered like `default_icons_dir`.
 - Tests: `tests/test_descriptions.py` — load over a synthetic directory;
-  absent-safe; id and file-stem mapping; non-empty filter; a non-`md` extension.
+  absent-safe; id and file-stem mapping; non-empty filter.
 - Exit criteria: descriptions load for the test fixtures; with no description
   directory the mapping is empty and no existing test changes.
 
@@ -155,7 +160,24 @@ A semantic re-rank is an **optional enhancement**, never a dependency, and
 
 `scripts/generate_icon_descriptions.py` — batch LLM description generator
 (**stdlib only**). It sends each icon image to an OpenAI-compatible
-vision/chat endpoint and writes one German description per icon.
+vision/chat endpoint and writes one structured JSON record per icon **and
+language** (default `de`; add `en` for the English variant). The English prompt
+states that a pictogram is a schematic representation and forbids filename/ID
+references in the content.
+
+The record is:
+
+```json
+{
+  "filename": "2239_Biene.png",
+  "description": "what is concretely visible in the image",
+  "usage": "when to use it and what it does NOT stand for",
+  "synonyms": ["...", "..."]
+}
+```
+
+`filename` maps the record back to the PNG; it is the only place the ARASAAC
+file name appears.
 
 | Aspect | Value |
 | --- | --- |
@@ -165,15 +187,16 @@ vision/chat endpoint and writes one German description per icon.
 | Key | `--api-key`, else `OPENROUTER_API_KEY` |
 | Headers | `User-Agent` (Cloudflare rejects Python's default), plus OpenRouter `HTTP-Referer` / `X-Title` |
 | Image | sent as a **base64 data URL** |
-| Output | `<out-dir>/[id]_[name]_description.<ext>` |
+| Structured output | `response_format` `json_schema` (`--no-json-schema` for models without strict schema support) |
+| Output | `<out-dir>/<lang>/[id]_[name]_description.json` |
 | Default `--out-dir` | `<icons-dir>/descriptions` |
-| Default `--filetype` | `md` |
+| Languages | `--lang de en` (default `de`); `--limit` counts icons |
 | Cache | an existing **non-empty** file is a cache hit (stop/resume-safe) |
 | `--force` | regenerate even when the file exists |
 | Writes | **atomic** (temp file + `os.replace`, like `fetch.py`) |
 
-Flags: `--icons-dir --out-dir --filetype --lang --model --base-url --api-key
---workers --limit --timeout --retries --force --dry-run`.
+Flags: `--icons-dir --out-dir --lang --model --base-url --api-key --workers
+--limit --timeout --retries --force --dry-run --no-json-schema`.
 
 Exit codes: **0** success, **1** one or more failures, **2** no API key,
 **130** interrupted (`SIGINT`).
@@ -184,8 +207,9 @@ Examples:
 # Plan only: list what would be generated
 uv run python scripts/generate_icon_descriptions.py --dry-run
 
-# Generate into icons/descriptions/, 8 parallel requests
-OPENROUTER_API_KEY=… uv run python scripts/generate_icon_descriptions.py --workers 8
+# Generate German + English into icons/descriptions/, 8 parallel requests
+OPENROUTER_API_KEY=… uv run python scripts/generate_icon_descriptions.py \
+  --lang de en --workers 8
 
 # Regenerate a small subset with a different model
 uv run python scripts/generate_icon_descriptions.py \
@@ -236,8 +260,8 @@ Inherited verbatim from [`icon-descriptions.md`](icon-descriptions.md) §5,
   differently; which one is authoritative, and how is the query built to avoid
   divergence?
 - How much BM25 weight is right, and is a single `w` enough across query types?
-- Should descriptions follow the per-request language of
-  [`multilingual.md`](multilingual.md), or stay German-first?
+- How does the per-request language of [`multilingual.md`](multilingual.md) map
+  onto the generated `<lang>/` description directories (e.g. fall back to `de`)?
 - Should any description text (synonyms, trap notes) be surface-able as
   word-only detail lines, or kept purely for ranking?
 - Is Phase 4 (semantics) worth shipping, given it needs an external/local
