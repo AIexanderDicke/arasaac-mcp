@@ -216,6 +216,53 @@ def test_request_description_can_omit_schema(
     assert "response_format" not in payload
 
 
+def test_request_description_sends_session_header(
+    gen: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _Response:
+        def __enter__(self) -> _Response:
+            return self
+
+        def __exit__(self, *args: object) -> bool:
+            return False
+
+        def read(self) -> bytes:
+            return b"{}"
+
+    def fake_urlopen(request: object, timeout: float = 0) -> _Response:
+        captured["request"] = request
+        return _Response()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    gen.request_description(
+        b"png",
+        "prompt",
+        model="m",
+        base_url="https://opencode.ai/zen/go/v1",
+        api_key="k",
+        timeout=1,
+        session_id="session-123",
+    )
+    request = captured["request"]
+    assert request.get_header("X-opencode-session") == "session-123"  # type: ignore[attr-defined]
+
+
+def test_endpoint_presets(gen: ModuleType) -> None:
+    go = gen.parse_args(["--endpoint", "opencode-go", "--api-key", "k"])
+    assert go.base_url == "https://opencode.ai/zen/go/v1"
+    assert go.model == "deepseek-v4-flash-vision-exp"
+    assert go.api_key_env == "OPENCODE_API_KEY"
+    assert go.use_schema is False  # Go rejects json_schema
+    assert go.session_id.startswith("arasaac-desc-")
+
+    default = gen.parse_args(["--api-key", "k"])
+    assert default.base_url == "https://openrouter.ai/api/v1"
+    assert default.api_key_env == "OPENROUTER_API_KEY"
+    assert default.use_schema is True
+
+
 # 4 -------------------------------------------------------------------------
 def test_collect_targets_skip_force_limit_langs(gen: ModuleType, tmp_path: Path) -> None:
     icons = _write_icons(tmp_path)

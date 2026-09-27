@@ -7,6 +7,12 @@ default) and the answer is written as JSON to
 ``<out-dir>/<lang>/[id]_description.json`` with the fields ``id``,
 ``description``, ``usage`` and ``synonyms``.
 
+Use ``--endpoint`` to pick a provider preset (``openrouter``, ``opencode-go``
+or ``opencode-zen``); the base URL, model and API-key variable follow from it
+and can still be overridden with ``--base-url`` / ``--model`` / ``--api-key``.
+OpenCode Go requires the ``x-opencode-session`` header (sent automatically) and
+does not support ``json_schema`` output.
+
 The job is cached and resumable: a non-empty file is skipped, so stopping and
 re-running continues where it left off.  Only the standard library is used,
 mirroring ``scripts/download_icons.py`` and ``arasaac_mcp/fetch.py``.
@@ -27,16 +33,51 @@ from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, NamedTuple
+from uuid import uuid4
 
-DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
-DEFAULT_MODEL = "deepseek/deepseek-v4-flash-vision-exp"
-DEFAULT_API_KEY_ENV = "OPENROUTER_API_KEY"
 #: Cloudflare in front of some endpoints blocks Python's default User-Agent
 #: (error 1010), so identify the tool explicitly.
 USER_AGENT = "arasaac-mcp/0.1 (+https://github.com/aiexanderdicke/arasaac)"
 #: Optional OpenRouter attribution headers.
 HTTP_REFERER = "https://github.com/aiexanderdicke/arasaac"
 APP_TITLE = "arasaac-mcp"
+
+
+class Endpoint(NamedTuple):
+    """A named OpenAI-compatible provider preset."""
+
+    name: str
+    base_url: str
+    default_model: str
+    api_key_env: str
+    supports_json_schema: bool = True
+
+
+#: Provider presets, selectable with ``--endpoint``.
+ENDPOINTS: dict[str, Endpoint] = {
+    "openrouter": Endpoint(
+        name="openrouter",
+        base_url="https://openrouter.ai/api/v1",
+        default_model="deepseek/deepseek-v4-flash-vision-exp",
+        api_key_env="OPENROUTER_API_KEY",
+    ),
+    # OpenCode Go ($10/mo subscription, same key as Zen) requires the
+    # ``x-opencode-session`` header and its vision models reject json_schema.
+    "opencode-go": Endpoint(
+        name="opencode-go",
+        base_url="https://opencode.ai/zen/go/v1",
+        default_model="deepseek-v4-flash-vision-exp",
+        api_key_env="OPENCODE_API_KEY",
+        supports_json_schema=False,
+    ),
+    "opencode-zen": Endpoint(
+        name="opencode-zen",
+        base_url="https://opencode.ai/zen/v1",
+        default_model="deepseek-v4-flash-vision-exp",
+        api_key_env="OPENCODE_API_KEY",
+    ),
+}
+DEFAULT_ENDPOINT = "openrouter"
 
 #: Structured-output schema, sent as ``response_format`` so the model is not
 #: merely *asked* to answer with JSON.
@@ -268,6 +309,7 @@ def request_description(
     api_key: str,
     timeout: float,
     use_schema: bool = True,
+    session_id: str = "",
 ) -> str:
     """POST the image + prompt to an OpenAI-compatible endpoint, return the body."""
     data_url = "data:image/png;base64," + base64.b64encode(image_bytes).decode("ascii")
@@ -285,16 +327,20 @@ def request_description(
     }
     if use_schema:
         payload["response_format"] = RESPONSE_FORMAT
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}",
+        "User-Agent": USER_AGENT,
+        "HTTP-Referer": HTTP_REFERER,
+        "X-Title": APP_TITLE,
+    }
+    if session_id:
+        # OpenCode Go requires this to route requests efficiently.
+        headers["x-opencode-session"] = session_id
     request = urllib.request.Request(
         base_url.rstrip("/") + "/chat/completions",
         data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-            "User-Agent": USER_AGENT,
-            "HTTP-Referer": HTTP_REFERER,
-            "X-Title": APP_TITLE,
-        },
+        headers=headers,
         method="POST",
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -374,6 +420,7 @@ def _describe_icon(
     timeout: float,
     retries: int,
     use_schema: bool = True,
+    session_id: str = "",
 ) -> str:
     """Describe one icon; returns ``"ok"`` or ``"failed"`` (never writes partials)."""
     image_bytes = target.png.read_bytes()
@@ -420,9 +467,20 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=["en"],
         help="one or more language codes, e.g. --lang de en (default: en)",
     )
-    parser.add_argument("--model", default=DEFAULT_MODEL)
-    parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
-    parser.add_argument("--api-key", default=os.environ.get(DEFAULT_API_KEY_ENV, ""))
+    parser.add_argument(
+        "--endpoint",
+        choices=tuple(ENDPOINTS),
+        default=DEFAULT_ENDPOINT,
+        help="provider preset (default: openrouter)",
+    )
+    parser.add_argument("--model", default=None, help="override the endpoint's model")
+    parser.add_argument("--base-url", default=None, help="override the endpoint's base URL")
+    parser.add_argument("--api-key", default=None, help="override the endpoint's API key")
+    parser.add_argument(
+        "--session-id",
+        default=None,
+        help="x-opencode-session value (default: a random id per run)",
+    )
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--timeout", type=float, default=120.0)
@@ -432,9 +490,18 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--no-json-schema",
         action="store_true",
-        help="omit response_format for models without strict structured output",
+        help="omit response_format even if the endpoint supports it",
     )
     args = parser.parse_args(argv)
+
+    endpoint = ENDPOINTS[args.endpoint]
+    args.base_url = args.base_url or endpoint.base_url
+    args.model = args.model or endpoint.default_model
+    args.api_key_env = endpoint.api_key_env
+    if args.api_key is None:
+        args.api_key = os.environ.get(endpoint.api_key_env, "")
+    args.session_id = args.session_id or f"arasaac-desc-{uuid4().hex}"
+    args.use_schema = endpoint.supports_json_schema and not args.no_json_schema
     if args.icons_dir is None:
         args.icons_dir = _default_icons_dir()
     return args
@@ -455,7 +522,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if not args.api_key:
         print(
-            f"error: no API key (set {DEFAULT_API_KEY_ENV} or pass --api-key)",
+            f"error: no API key (set {args.api_key_env} or pass --api-key)",
             file=sys.stderr,
             flush=True,
         )
@@ -484,7 +551,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 api_key=args.api_key,
                 timeout=args.timeout,
                 retries=args.retries,
-                use_schema=not args.no_json_schema,
+                use_schema=args.use_schema,
+                session_id=args.session_id,
             )
             futures[future] = target
         for index, future in enumerate(as_completed(futures), 1):
