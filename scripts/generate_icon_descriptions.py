@@ -405,8 +405,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--lang",
         nargs="+",
-        default=["de"],
-        help="one or more language codes, e.g. --lang de en (default: de)",
+        default=["en"],
+        help="one or more language codes, e.g. --lang de en (default: en)",
     )
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)

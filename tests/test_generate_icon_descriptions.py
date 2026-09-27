@@ -253,7 +253,7 @@ def test_main_writes_json_and_second_run_skips(
     argv = ["--icons-dir", str(icons), "--api-key", "test", "--workers", "3"]
 
     assert gen.main(argv) == 0
-    out = icons / "descriptions" / "de"
+    out = icons / "descriptions" / "en"
     record = json.loads((out / "2239_Biene_description.json").read_text(encoding="utf-8"))
     assert record["filename"] == "2239_Biene.png"
     assert record["description"] == "Eine Biene sammelt Nektar."
@@ -296,7 +296,7 @@ def test_main_reports_failure_without_partial_file(
     monkeypatch.setattr(gen, "request_description", fake)
     rc = gen.main(["--icons-dir", str(icons), "--api-key", "x", "--workers", "1", "--retries", "0"])
     assert rc == 1
-    assert not (icons / "descriptions" / "de" / "2239_Biene_description.json").exists()
+    assert not (icons / "descriptions" / "en" / "2239_Biene_description.json").exists()
 
 
 # 7 -------------------------------------------------------------------------
