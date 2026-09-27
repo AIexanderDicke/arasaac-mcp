@@ -48,7 +48,7 @@ Phase 1 is being implemented.
 
 A stdlib-only batch script sends each icon PNG to a vision model and writes a
 structured JSON record, one file per icon and language, to
-`<out-dir>/<lang>/[id]_[name]_description.json`. Full interface in §3.
+`<out-dir>/<lang>/[id]_description.json`. Full interface in §3.
 
 - Files: `scripts/generate_icon_descriptions.py` (new).
 - Tests: unit tests over a mocked/injected HTTP layer (no network): filename
@@ -167,7 +167,7 @@ references in the content; a `json_schema` `response_format` enforces the shape.
 
 ### Record structure
 
-One file per icon and language, `<lang>/[id]_[name]_description.json`:
+One file per icon and language, `<lang>/[id]_description.json`:
 
 ```json
 {
@@ -200,7 +200,7 @@ The model never sees the id or the file name. Consumers should key on `id`.
 | Headers | `User-Agent` (Cloudflare rejects Python's default), plus OpenRouter `HTTP-Referer` / `X-Title` |
 | Image | sent as a **base64 data URL** |
 | Structured output | `response_format` `json_schema` (`--no-json-schema` for models without strict schema support) |
-| Output | `<out-dir>/<lang>/[id]_[name]_description.json` |
+| Output | `<out-dir>/<lang>/[id]_description.json` |
 | Default `--out-dir` | `<icons-dir>/descriptions` |
 | Languages | `--lang en de` (default `en`); `--limit` counts icons |
 | Cache | an existing **non-empty** file is a cache hit (stop/resume-safe) |

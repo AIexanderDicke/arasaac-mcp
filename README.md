@@ -34,7 +34,7 @@ description for every pictogram. These descriptions are the basis for a better,
 description-based search (plan:
 [`docs/optimized-search.md`](docs/optimized-search.md)).
 
-- **Output:** `icons/descriptions/<lang>/[id]_[name]_description.json` — one
+- **Output:** `icons/descriptions/<lang>/[id]_description.json` — one
   JSON file per icon and language (default `en`; add German with `--lang en de`).
 - **Cached & resumable:** an existing non-empty file is skipped, so you can stop
   and re-run to continue; `--force` regenerates. `--dry-run` lists the files
