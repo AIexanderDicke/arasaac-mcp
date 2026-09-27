@@ -16,12 +16,10 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-DESCRIPTION = {
+RECORD = {
     "description": "Eine Biene sammelt Nektar.",
-    "visual": "Gelb-schwarzes Insekt mit Flügeln.",
-    "usage": "Zeigt das Insekt Biene.",
+    "usage": "Für das Insekt Biene; nicht für andere Insekten.",
     "synonyms": ["Honigbiene", "Imme"],
-    "caveats": None,
 }
 
 METADATA = [
@@ -74,7 +72,7 @@ def _write_icons(
 
 
 def _fake_body(data: dict | None = None) -> str:
-    content = json.dumps(data if data is not None else DESCRIPTION, ensure_ascii=False)
+    content = json.dumps(data if data is not None else RECORD, ensure_ascii=False)
     return json.dumps({"choices": [{"message": {"content": content}}]}, ensure_ascii=False)
 
 
@@ -89,43 +87,42 @@ def test_parse_icon_filename(gen: ModuleType) -> None:
     assert gen.parse_icon_filename("metadata_de.json") is None
 
 
-def test_target_path_md_and_txt(gen: ModuleType, tmp_path: Path) -> None:
-    assert gen.target_path(tmp_path, 2239, "Biene", "md") == tmp_path / "2239_Biene_description.md"
-    assert gen.target_path(tmp_path, 2239, "Biene", "txt") == (
-        tmp_path / "2239_Biene_description.txt"
+def test_target_path_uses_lang_and_json(gen: ModuleType, tmp_path: Path) -> None:
+    assert gen.target_path(tmp_path, "de", 2239, "Biene") == (
+        tmp_path / "de" / "2239_Biene_description.json"
+    )
+    assert gen.target_path(tmp_path, "en", 2239, "Biene") == (
+        tmp_path / "en" / "2239_Biene_description.json"
     )
 
 
 # 2 -------------------------------------------------------------------------
-def test_build_prompt_mentions_name_and_lang(gen: ModuleType) -> None:
+def test_build_prompt_mentions_schematic_and_fields(gen: ModuleType) -> None:
     context = {"keywords": ["Biene"], "tags": ["insekt"], "categories": ["tier"]}
-    prompt = gen.build_prompt("Biene", 2239, context, "de")
-    assert "Biene" in prompt
-    assert "de" in prompt
-    assert "Deutsch" in prompt
+    prompt = gen.build_prompt("Biene", context, "en")
+    assert '"Biene"' in prompt
+    assert "English" in prompt
+    assert "schematic" in prompt
     assert "insekt" in prompt
+    for field in ("description", "usage", "synonyms"):
+        assert field in prompt
+    assert "file name" in prompt  # explicitly forbids filename references
 
 
-def test_render_description_markdown(gen: ModuleType) -> None:
-    body = gen.render_description(DESCRIPTION, 2239, "Biene", "md")
-    assert body.startswith("# Biene (ARASAAC 2239)")
-    for heading in (
-        "## Gezeigt im Bild",
-        "## Bedeutung und Verwendung",
-        "## Synonyme und Stichwörter",
-        "## Hinweise",
-    ):
-        assert heading in body
-    assert "Eine Biene sammelt Nektar." in body
-    assert "Honigbiene" in body
+def test_build_record_has_filename_and_content(gen: ModuleType) -> None:
+    record = gen.build_record(RECORD, "2239_Biene.png")
+    assert record == {
+        "filename": "2239_Biene.png",
+        "description": "Eine Biene sammelt Nektar.",
+        "usage": "Für das Insekt Biene; nicht für andere Insekten.",
+        "synonyms": ["Honigbiene", "Imme"],
+    }
+    assert "2239" not in record["description"]
 
 
-def test_render_description_txt_has_no_hash(gen: ModuleType) -> None:
-    body = gen.render_description(DESCRIPTION, 2239, "Biene", "txt")
-    assert "#" not in body
-    assert "Biene" in body
-    assert "Gezeigt im Bild" in body
-    assert "Imme" in body
+def test_build_record_accepts_verwendung_alias(gen: ModuleType) -> None:
+    record = gen.build_record({"description": "x", "verwendung": "y", "synonyms": []}, "1_A.png")
+    assert record["usage"] == "y"
 
 
 # 3 -------------------------------------------------------------------------
@@ -134,7 +131,7 @@ def test_parse_model_response_plain_content(gen: ModuleType) -> None:
 
 
 def test_parse_model_response_fenced_block(gen: ModuleType) -> None:
-    content = "```json\n" + json.dumps(DESCRIPTION, ensure_ascii=False) + "\n```"
+    content = "```json\n" + json.dumps(RECORD, ensure_ascii=False) + "\n```"
     body = json.dumps({"choices": [{"message": {"content": content}}]})
     assert gen.parse_model_response(body)["synonyms"] == ["Honigbiene", "Imme"]
 
@@ -165,7 +162,12 @@ def test_request_description_sets_headers_and_endpoint(
 
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
     gen.request_description(
-        b"png", "prompt", model="m", base_url="https://openrouter.ai/api/v1", api_key="k", timeout=1
+        b"png",
+        "prompt",
+        model="m",
+        base_url="https://openrouter.ai/api/v1",
+        api_key="k",
+        timeout=1,
     )
 
     request = captured["request"]
@@ -173,28 +175,71 @@ def test_request_description_sets_headers_and_endpoint(
     user_agent = request.get_header("User-agent")  # type: ignore[attr-defined]
     assert user_agent and "arasaac" in user_agent.lower()
     assert request.get_header("X-title") == gen.APP_TITLE  # type: ignore[attr-defined]
+    payload = json.loads(request.data)  # type: ignore[attr-defined]
+    assert payload["response_format"]["type"] == "json_schema"
+    assert set(payload["response_format"]["json_schema"]["schema"]["properties"]) == {
+        "description",
+        "usage",
+        "synonyms",
+    }
+
+
+def test_request_description_can_omit_schema(
+    gen: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _Response:
+        def __enter__(self) -> _Response:
+            return self
+
+        def __exit__(self, *args: object) -> bool:
+            return False
+
+        def read(self) -> bytes:
+            return b"{}"
+
+    def fake_urlopen(request: object, timeout: float = 0) -> _Response:
+        captured["request"] = request
+        return _Response()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    gen.request_description(
+        b"png",
+        "prompt",
+        model="m",
+        base_url="https://x.test",
+        api_key="k",
+        timeout=1,
+        use_schema=False,
+    )
+    payload = json.loads(captured["request"].data)  # type: ignore[attr-defined]
+    assert "response_format" not in payload
 
 
 # 4 -------------------------------------------------------------------------
-def test_collect_targets_skip_force_limit(gen: ModuleType, tmp_path: Path) -> None:
+def test_collect_targets_skip_force_limit_langs(gen: ModuleType, tmp_path: Path) -> None:
     icons = _write_icons(tmp_path)
     out = icons / "descriptions"
-    out.mkdir()
-    (out / "2239_Biene_description.md").write_text("done", encoding="utf-8")
+    (out / "de").mkdir(parents=True)
+    (out / "de" / "2239_Biene_description.json").write_text("{}", encoding="utf-8")
 
-    ids = [t.pic_id for t in gen.collect_targets(icons, out, "md")]
-    assert ids == [3151, 10147]
+    ids = [(t.pic_id, t.lang) for t in gen.collect_targets(icons, out, ["de"])]
+    assert ids == [(3151, "de"), (10147, "de")]
 
-    forced = [t.pic_id for t in gen.collect_targets(icons, out, "md", force=True)]
-    assert forced == [2239, 3151, 10147]
+    multi = [(t.pic_id, t.lang) for t in gen.collect_targets(icons, out, ["de", "en"])]
+    assert (2239, "en") in multi
+    assert (2239, "de") not in multi
 
-    limited = gen.collect_targets(icons, out, "md", force=True, limit=1)
-    assert [t.pic_id for t in limited] == [2239]
-    assert gen.collect_targets(icons, out, "md", limit=1)[0].pic_id == 3151
+    forced = [(t.pic_id, t.lang) for t in gen.collect_targets(icons, out, ["de"], force=True)]
+    assert forced == [(2239, "de"), (3151, "de"), (10147, "de")]
+
+    limited = gen.collect_targets(icons, out, ["de", "en"], force=True, limit=1)
+    assert {(t.pic_id, t.lang) for t in limited} == {(2239, "de"), (2239, "en")}
 
 
 # 5 -------------------------------------------------------------------------
-def test_main_writes_and_second_run_skips(
+def test_main_writes_json_and_second_run_skips(
     gen: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     icons = _write_icons(tmp_path)
@@ -208,15 +253,35 @@ def test_main_writes_and_second_run_skips(
     argv = ["--icons-dir", str(icons), "--api-key", "test", "--workers", "3"]
 
     assert gen.main(argv) == 0
-    out = icons / "descriptions"
-    for name in ("2239_Biene_description.md", "3151_Auto_description.md"):
-        assert (out / name).is_file()
-    assert (out / "10147_Toilettenpapier_abreißen_description.md").is_file()
+    out = icons / "descriptions" / "de"
+    record = json.loads((out / "2239_Biene_description.json").read_text(encoding="utf-8"))
+    assert record["filename"] == "2239_Biene.png"
+    assert record["description"] == "Eine Biene sammelt Nektar."
+    assert (out / "10147_Toilettenpapier_abreißen_description.json").is_file()
     assert len(calls) == 3
 
     calls.clear()
     assert gen.main(argv) == 0
     assert calls == []
+
+
+def test_main_generates_multiple_languages(
+    gen: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    icons = _write_icons(tmp_path)
+    calls: list[str] = []
+
+    def fake(image_bytes: bytes, prompt: str, **kwargs: object) -> str:
+        calls.append(prompt)
+        return _fake_body()
+
+    monkeypatch.setattr(gen, "request_description", fake)
+    argv = ["--icons-dir", str(icons), "--api-key", "test", "--lang", "de", "en"]
+
+    assert gen.main(argv) == 0
+    assert (icons / "descriptions" / "de" / "2239_Biene_description.json").is_file()
+    assert (icons / "descriptions" / "en" / "2239_Biene_description.json").is_file()
+    assert len(calls) == 6
 
 
 # 6 -------------------------------------------------------------------------
@@ -231,7 +296,7 @@ def test_main_reports_failure_without_partial_file(
     monkeypatch.setattr(gen, "request_description", fake)
     rc = gen.main(["--icons-dir", str(icons), "--api-key", "x", "--workers", "1", "--retries", "0"])
     assert rc == 1
-    assert not (icons / "descriptions" / "2239_Biene_description.md").exists()
+    assert not (icons / "descriptions" / "de" / "2239_Biene_description.json").exists()
 
 
 # 7 -------------------------------------------------------------------------

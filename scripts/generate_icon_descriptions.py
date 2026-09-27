@@ -1,14 +1,15 @@
 #!/usr/bin/env python
-"""Generate a detailed German description for every ARASAAC pictogram.
+"""Generate a structured description for every ARASAAC pictogram.
 
-For each ``<icons-dir>/[id]_[name].png`` the PNG is sent once to a
+For each ``<icons-dir>/[id]_[name].png`` the PNG is sent once per language to a
 vision-capable, OpenAI-compatible chat-completions endpoint (OpenRouter by
-default) and the structured answer is written to
-``<out-dir>/[id]_[name]_description.<md|txt>``.
+default) and the answer is written as JSON to
+``<out-dir>/<lang>/[id]_[name]_description.json`` with the fields ``filename``,
+``description``, ``usage`` and ``synonyms``.
 
-The job is cached and resumable: a non-empty description file is skipped, so
-stopping and re-running continues where it left off.  Only the standard library
-is used, mirroring ``scripts/download_icons.py`` and ``arasaac_mcp/fetch.py``.
+The job is cached and resumable: a non-empty file is skipped, so stopping and
+re-running continues where it left off.  Only the standard library is used,
+mirroring ``scripts/download_icons.py`` and ``arasaac_mcp/fetch.py``.
 """
 
 from __future__ import annotations
@@ -37,22 +38,44 @@ USER_AGENT = "arasaac-mcp/0.1 (+https://github.com/aiexanderdicke/arasaac)"
 HTTP_REFERER = "https://github.com/aiexanderdicke/arasaac"
 APP_TITLE = "arasaac-mcp"
 
+#: Structured-output schema, sent as ``response_format`` so the model is not
+#: merely *asked* to answer with JSON.
+RESPONSE_FORMAT: dict[str, Any] = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "pictogram_description",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "description": {"type": "string"},
+                "usage": {"type": "string"},
+                "synonyms": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["description", "usage", "synonyms"],
+            "additionalProperties": False,
+        },
+    },
+}
+
 LANGUAGE_NAMES: dict[str, str] = {
-    "de": "Deutsch",
+    "de": "German",
     "en": "English",
-    "es": "Español",
-    "fr": "Français",
-    "it": "Italiano",
+    "es": "Spanish",
+    "fr": "French",
+    "it": "Italian",
 }
 
 _ICON_RE = re.compile(r"^(\d+)_(.*)\.png$")
 
 
 class IconTarget(NamedTuple):
-    """One icon scheduled for description."""
+    """One icon scheduled for description in one language."""
 
     pic_id: int
     name: str
+    filename: str
+    lang: str
     png: Path
     path: Path
 
@@ -72,11 +95,9 @@ def parse_icon_filename(filename: str) -> tuple[int, str] | None:
     return int(match.group(1)), match.group(2)
 
 
-def target_path(out_dir: Path, pic_id: int, name: str, filetype: str) -> Path:
-    """The description file for one icon: ``[id]_[name]_description.<ext>``."""
-    if filetype not in ("md", "txt"):
-        raise ValueError(f"unsupported filetype: {filetype!r}")
-    return Path(out_dir) / f"{pic_id}_{name}_description.{filetype}"
+def target_path(out_dir: Path, lang: str, pic_id: int, name: str) -> Path:
+    """Description file for one icon: ``<out>/<lang>/[id]_[name]_description.json``."""
+    return Path(out_dir) / lang / f"{pic_id}_{name}_description.json"
 
 
 def load_metadata(icons_dir: Path) -> dict[int, dict[str, Any]]:
@@ -131,30 +152,36 @@ def metadata_context(entry: dict[str, Any] | None) -> dict[str, list[str]]:
     }
 
 
-def build_prompt(name: str, pic_id: int, context: dict[str, list[str]], lang: str) -> str:
-    """The instruction sent alongside the image; asks for German JSON output."""
+def build_prompt(name: str, context: dict[str, list[str]], lang: str) -> str:
+    """The instruction sent alongside the image; asks for the schema's fields."""
     lang_name = LANGUAGE_NAMES.get(lang, lang)
     lines = [
-        "Du beschreibst ein ARASAAC-Piktogramm für eine barrierefreie Kommunikationshilfe.",
-        f"Antworte in der Sprache '{lang}' ({lang_name}).",
+        "You are describing an ARASAAC pictogram for an accessible communication aid.",
+        "Important: a pictogram is always a schematic, stylised representation — never",
+        "a photograph and never a realistic scene. Describe it accordingly.",
+        f"Write the content in {lang_name} (language code '{lang}').",
         "",
-        f'Piktogramm: "{name}" (ARASAAC-ID {pic_id}).',
+        f'The pictogram represents the concept "{name}".',
     ]
     for label, key in (
-        ("Schlüsselwörter", "keywords"),
-        ("Themen", "tags"),
-        ("Kategorien", "categories"),
+        ("Keywords", "keywords"),
+        ("Topics", "tags"),
+        ("Categories", "categories"),
     ):
         values = context.get(key) or []
         if values:
             lines.append(f"{label}: {', '.join(values)}")
     lines += [
         "",
-        "Beschreibe, was im Bild zu sehen ist, welche Bedeutung und Verwendung das",
-        "Piktogramm hat und welche Synonyme passen.",
-        "Antworte ausschließlich mit einem JSON-Objekt mit den Feldern:",
-        '"description" (string), "visual" (string), "usage" (string), '
-        '"synonyms" (list of strings), "caveats" (string or null).',
+        "Return a JSON object with exactly these fields:",
+        "- description: what is concretely visible in the image (schematic).",
+        "- usage: when and in which context this pictogram is used, and what it",
+        "  explicitly does NOT stand for (e.g. person vs. object, direction vs.",
+        "  place), so the correct pictogram can be chosen.",
+        "- synonyms: a list of fitting words/synonyms in the same language.",
+        "",
+        "Never mention a file name, an ID or the name 'ARASAAC' anywhere in the",
+        "content.",
     ]
     return "\n".join(lines)
 
@@ -167,48 +194,19 @@ def _as_text(value: object) -> str:
     return str(value)
 
 
-def render_description(data: dict[str, Any], pic_id: int, name: str, filetype: str) -> str:
-    """Render the model's structured JSON into the description file body."""
-    description = _as_text(data.get("description"))
-    visual = _as_text(data.get("visual"))
-    usage = _as_text(data.get("usage"))
-    synonyms = [str(value) for value in (data.get("synonyms") or []) if str(value).strip()]
-    caveats = _as_text(data.get("caveats")) or "Keine."
+def build_record(data: dict[str, Any], filename: str) -> dict[str, Any]:
+    """Assemble the output record: model content plus the source file name.
 
-    if filetype == "md":
-        parts = [
-            f"# {name} (ARASAAC {pic_id})",
-            "",
-            "## Gezeigt im Bild",
-            "",
-            visual or "Keine Angabe.",
-            "",
-            "## Bedeutung und Verwendung",
-            "",
-            description or "Keine Angabe.",
-        ]
-        if usage:
-            parts += ["", usage]
-        parts += ["", "## Synonyme und Stichwörter", ""]
-        parts += [f"- {value}" for value in synonyms] if synonyms else ["Keine."]
-        parts += ["", "## Hinweise", "", caveats]
-        return "\n".join(parts).rstrip() + "\n"
-
-    parts = [
-        f"{name} (ARASAAC {pic_id})",
-        "",
-        "Gezeigt im Bild:",
-        visual or "Keine Angabe.",
-        "",
-        "Bedeutung und Verwendung:",
-        description or "Keine Angabe.",
-    ]
-    if usage:
-        parts += ["", usage]
-    parts += ["", "Synonyme und Stichwörter:"]
-    parts += [f"- {value}" for value in synonyms] if synonyms else ["Keine."]
-    parts += ["", "Hinweise:", caveats]
-    return "\n".join(parts).rstrip() + "\n"
+    ``filename`` is the only place the ARASAAC file name appears; the generated
+    fields never reference it (the prompt forbids it).
+    """
+    synonyms = [str(value).strip() for value in (data.get("synonyms") or []) if str(value).strip()]
+    return {
+        "filename": filename,
+        "description": _as_text(data.get("description")),
+        "usage": _as_text(data.get("usage") or data.get("verwendung")),
+        "synonyms": synonyms,
+    }
 
 
 def _try_json(text: str) -> Any:
@@ -257,10 +255,11 @@ def request_description(
     base_url: str,
     api_key: str,
     timeout: float,
+    use_schema: bool = True,
 ) -> str:
     """POST the image + prompt to an OpenAI-compatible endpoint, return the body."""
     data_url = "data:image/png;base64," + base64.b64encode(image_bytes).decode("ascii")
-    payload = {
+    payload: dict[str, Any] = {
         "model": model,
         "messages": [
             {
@@ -272,6 +271,8 @@ def request_description(
             }
         ],
     }
+    if use_schema:
+        payload["response_format"] = RESPONSE_FORMAT
     request = urllib.request.Request(
         base_url.rstrip("/") + "/chat/completions",
         data=json.dumps(payload).encode("utf-8"),
@@ -305,12 +306,16 @@ def write_text_atomic(path: Path, text: str) -> None:
 def collect_targets(
     icons_dir: Path,
     out_dir: Path,
-    filetype: str,
+    langs: Sequence[str],
     *,
     force: bool = False,
     limit: int = 0,
 ) -> list[IconTarget]:
-    """Icons to describe, naturally sorted by id, minus cached ones (unless forced)."""
+    """Icons to describe (all languages), naturally sorted, minus cached ones.
+
+    ``limit`` counts **icons**, so ``--limit 50 --lang de en`` describes 50
+    icons and writes up to 100 files.
+    """
     try:
         names = os.listdir(icons_dir)
     except FileNotFoundError:
@@ -327,17 +332,23 @@ def collect_targets(
     parsed.sort(key=lambda item: (item[0], item[2]))
 
     targets: list[IconTarget] = []
+    selected = 0
     for pic_id, name, filename in parsed:
         png = Path(icons_dir) / filename
         if not png.is_file():
             continue
-        path = target_path(out_dir, pic_id, name, filetype)
-        if not force and path.is_file() and path.stat().st_size > 0:
+        icon_targets: list[IconTarget] = []
+        for lang in langs:
+            path = target_path(out_dir, lang, pic_id, name)
+            if not force and path.is_file() and path.stat().st_size > 0:
+                continue
+            icon_targets.append(IconTarget(pic_id, name, filename, lang, png, path))
+        if not icon_targets:
             continue
-        targets.append(IconTarget(pic_id, name, png, path))
-
-    if limit > 0:
-        targets = targets[:limit]
+        targets.extend(icon_targets)
+        selected += 1
+        if limit > 0 and selected >= limit:
+            break
     return targets
 
 
@@ -345,18 +356,17 @@ def _describe_icon(
     target: IconTarget,
     *,
     metadata: dict[int, dict[str, Any]],
-    lang: str,
-    filetype: str,
     model: str,
     base_url: str,
     api_key: str,
     timeout: float,
     retries: int,
+    use_schema: bool = True,
 ) -> str:
     """Describe one icon; returns ``"ok"`` or ``"failed"`` (never writes partials)."""
     image_bytes = target.png.read_bytes()
     context = metadata_context(metadata.get(target.pic_id))
-    prompt = build_prompt(target.name, target.pic_id, context, lang)
+    prompt = build_prompt(target.name, context, target.lang)
 
     last_error: Exception | None = None
     for attempt in range(retries + 1):
@@ -368,9 +378,11 @@ def _describe_icon(
                 base_url=base_url,
                 api_key=api_key,
                 timeout=timeout,
+                use_schema=use_schema,
             )
             data = parse_model_response(body)
-            text = render_description(data, target.pic_id, target.name, filetype)
+            record = build_record(data, target.filename)
+            text = json.dumps(record, ensure_ascii=False, indent=2) + "\n"
             write_text_atomic(target.path, text)
             return "ok"
         except Exception as exc:
@@ -379,7 +391,7 @@ def _describe_icon(
                 time.sleep(0.25 * (2**attempt))
 
     print(
-        f"  failed {target.pic_id}_{target.name}: {last_error}",
+        f"  failed {target.lang} {target.filename}: {last_error}",
         file=sys.stderr,
         flush=True,
     )
@@ -390,8 +402,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--icons-dir", type=Path, default=None)
     parser.add_argument("--out-dir", type=Path, default=None)
-    parser.add_argument("--filetype", choices=("md", "txt"), default="md")
-    parser.add_argument("--lang", default="de")
+    parser.add_argument(
+        "--lang",
+        nargs="+",
+        default=["de"],
+        help="one or more language codes, e.g. --lang de en (default: de)",
+    )
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     parser.add_argument("--api-key", default=os.environ.get(DEFAULT_API_KEY_ENV, ""))
@@ -401,6 +417,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--retries", type=int, default=3)
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--no-json-schema",
+        action="store_true",
+        help="omit response_format for models without strict structured output",
+    )
     args = parser.parse_args(argv)
     if args.icons_dir is None:
         args.icons_dir = _default_icons_dir()
@@ -412,12 +433,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     icons_dir: Path = args.icons_dir
     out_dir: Path = args.out_dir if args.out_dir is not None else icons_dir / "descriptions"
 
-    targets = collect_targets(icons_dir, out_dir, args.filetype, force=args.force, limit=args.limit)
+    targets = collect_targets(icons_dir, out_dir, args.lang, force=args.force, limit=args.limit)
 
     if args.dry_run:
         for target in targets:
             print(target.path)
-        print(f"{len(targets)} icon(s) to describe (dry run)", flush=True)
+        print(f"{len(targets)} file(s) to describe (dry run)", flush=True)
         return 0
 
     if not args.api_key:
@@ -435,7 +456,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     metadata = load_metadata(icons_dir)
     total = len(targets)
     counts = {"ok": 0, "failed": 0, "skipped": 0}
-    print(f"Describing {total} icon(s) -> {out_dir}", flush=True)
+    print(f"Describing {total} file(s) -> {out_dir}", flush=True)
 
     futures = {}
     interrupted = False
@@ -446,13 +467,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 _describe_icon,
                 target,
                 metadata=metadata,
-                lang=args.lang,
-                filetype=args.filetype,
                 model=args.model,
                 base_url=args.base_url,
                 api_key=args.api_key,
                 timeout=args.timeout,
                 retries=args.retries,
+                use_schema=not args.no_json_schema,
             )
             futures[future] = target
         for index, future in enumerate(as_completed(futures), 1):
