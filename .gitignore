@@ -20,5 +20,7 @@ htmlcov/
 
 # content directories
 icons/*
-# the word index ships in the repo; the ~338 MB PNG set is fetched on demand
+# the word index and the generated English descriptions ship in the repo;
+# the ~338 MB PNG set and the per-icon description cache are fetched/generated
 !icons/metadata_de.json
+!icons/descriptions.jsonl
