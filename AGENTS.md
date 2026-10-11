@@ -45,13 +45,14 @@ core.
 | `arasaac_mcp/cli.py` | `make-sheet` CLI (entry point) |
 | `arasaac_mcp/catalog.py` | Word-based search/resolve (`Catalog`, `get_catalog`): the word→pictogram mapping underneath the tools; builds the whole index from `metadata_de.json` even with no PNGs, and `ensure()`/`path_of()` materialise a pictogram (local file or lazy fetch) |
 | `arasaac_mcp/fetch.py` | On-demand ARASAAC download (stdlib only): one pictogram → cache, atomic write, size fallback |
+| `arasaac_mcp/descriptions.py` | Loader for the LLM description records: the retrieval corpus for the word layer (JSONL or per-icon JSON, absent-safe) |
 | `arasaac_mcp/embeddings.py` | Embedding clients for the vector layer: OpenAI-compatible endpoint (OpenRouter default) + local `sentence-transformers`, retries/pace, `ARASAAC_EMBED_*` |
 | `arasaac_mcp/mcp/` | `arasaac-mcp` MCP server **package**: one file per tool (`search_pictograms.py`, `semantic_search_pictograms.py`, `view_pictogram.py`, `render_pictogram_sheet.py`, `render_pictogram_layout.py`) plus `server.py` (builds the server), `context.py` (catalog + output dir), `media.py` (image/URL results), `resources.py` (prompt + skill), `routes.py` (`GET /sheet/<name>`) |
 | `arasaac_mcp/vector.py` | Qdrant vector layer for the MCP server: one point per pictogram (`text`/`syn` vectors + indexed payload), search modes (`semantic`/`synonyms`/`hybrid`), payload filters, deterministic tag boost |
 | `arasaac_mcp/skill.py` | Locates the thin Agent Skill and the packaged recipe parts for the MCP prompt/resources |
 | `scripts/build_skill.py` | Generates `skills/` + `arasaac_mcp/recipe/` from `scripts/prompt.md` (`--check` for drift) |
 | `scripts/test_mcp.py` | Offline catalog + MCP tests (in-memory client, no LLM) |
-| `scripts/index_descriptions.py` | Ingest script: embeds description records into the Qdrant vector database (resumable, `--recreate`, `--dry-run`) |
+| `scripts/index_descriptions.py` | Ingest script: embeds description records into the Qdrant vector database (resumable, `--recreate`, `--refresh-payload` without re-embedding, `--dry-run`) |
 | `scripts/qdrant_dump.py` | Qdrant snapshot export/import (`export`/`import` subcommands, dumps into `./dumps`) |
 | `scripts/semantic_search_manual.py` | Full manual test: DB stats + demo queries in all modes + label round-trip assert |
 | `scripts/mcp_up.sh` | Start/restart relay + MCP server in tmux without killing the VS Code forwarded port |
@@ -322,17 +323,20 @@ Qdrant's in-memory client and a deterministic `HashingEmbedder` — no Docker,
 no model, no network; `tests/test_qdrant_dump.py` exercises the snapshot
 round-trip against a live server and skips when none is running.
 
-### Icons: local-first, fetched on demand
+### Icons: display-only, fetched by id on demand
 
-`catalog.py` builds the index from `metadata_de.json` alone (it synthesises the
-same `[id]_[description].png` name `scripts/download_icons.py` writes), so the
-full pictogram set no longer has to be present. A word maps to a `Pictogram`
-with a `pic_id`; `Catalog.ensure(pic)` (and `path_of`) returns a local path —
-the cached/bundled file if it exists, otherwise it downloads via
-`arasaac_mcp/fetch.py` into `ARASAAC_CACHE_DIR` and caches it. The MCP render
-and view tools call `ensure` before drawing; `layout.py` stays Pillow-only and
-never touches the network. If fetching is off and the file is missing, callers
-raise `FileNotFoundError` — a missing icon is better than a wrong one.
+Retrieval never touches the PNG set: `catalog.py` builds the index from
+`metadata_de.json` alone (it synthesises the same `[id]_[description].png` name
+`scripts/download_icons.py` would write) and scores the description records on
+top (see the word-contract section). A word maps to a `Pictogram` with a
+`pic_id`; `Catalog.ensure(pic)` (and `path_of`) returns a local path — any
+locally existing `<id>_*.png` counts, matched by **id prefix only** (their
+descriptive names are never read into the index); otherwise it downloads via
+`arasaac_mcp/fetch.py` — by ARASAAC id — into `ARASAAC_CACHE_DIR` and caches
+it. The MCP render and view tools call `ensure` before drawing; `layout.py`
+stays Pillow-only and never touches the network. If fetching is off and the
+file is missing, callers raise `FileNotFoundError` — a missing icon is better
+than a wrong one.
 
 ### Skill generation
 
@@ -425,10 +429,20 @@ render_layout_and_save(
 ### The agent tool contract is WORD-BASED
 - The agent must **never** see or handle numeric IDs or file names. It searches
   and refers to pictograms by German words only; tools resolve words to files.
-- `search_pictograms` searches filenames **and** `metadata_de.json` (German
-  `keywords`, English `tags`/`categories`) and returns words, not files.
+- **The pictogram PNG set is display-only.** Retrieval never reads `icons/*.png`
+  (their descriptive file names included): the index comes from
+  `metadata_de.json` plus the LLM description files
+  (`icons/descriptions.jsonl`, loader `arasaac_mcp/descriptions.py`), and
+  display locates/fetches files **by ARASAAC id prefix only** (`<id>_*.png`,
+  fetched from ARASAAC by id when missing). A metadata entry without `_id` is
+  skipped; without `metadata_de.json` nothing is indexed.
+- `search_pictograms` searches the description files (`description`/`usage`/
+  `synonyms`) **and** `metadata_de.json` (German `keywords`, English
+  `tags`/`categories`) and returns words, not files.
 - Matching is **AND** across query tokens; a token that matches nothing yields
-  no results. Stem matching is forgiving (`rotes`→`rot`, `Autos`→`Auto`).
+  no results. Stem matching is forgiving (`rotes`→`rot`, `Autos`→`Auto`); an
+  exact English synonym from a description scores like a stem, a (≥4-char)
+  fragment of the description text a little below it.
 - Many words map to several icons. Search disambiguates by appending a unique
   synonym: `Auto (KFZ)`, `Schüler (Student)`. **Labels must round-trip**: the
   label shown in a search result must resolve back to the same pictogram. The

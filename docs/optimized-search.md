@@ -24,9 +24,10 @@ with optional embedding re-rank. The retrieval layer was then built as a
   (snapshot export/import); full manual test:
   `scripts/semantic_search_manual.py`. See AGENTS.md §Vector search.
 - Rationale: no FTS integration cost, payload filters/boosts are native, and
-  the lexical `_score` path in `catalog.py` stays untouched (the tool is
-  added **alongside** `search_pictograms`, so the metadata-only, offline
-  behaviour of Phase 3's fallback is preserved by construction).
+  the lexical `_score` path in `catalog.py` keeps its AND semantics (the tool
+  is added **alongside** `search_pictograms`, so the metadata-only, offline
+  behaviour of Phase 3's fallback is preserved by construction — with the
+  description records as an additional ranked source, not an FTS rewrite).
 - The evaluation set of Phase 5 is still open work; the manual script asserts
   the label round-trip per demo query.
 
