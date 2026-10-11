@@ -119,7 +119,10 @@ def register(server: FastMCP, context: ServerContext) -> None:
         """Find ARASAAC pictograms semantically, from a natural request.
 
         Embeds the request (German sentences work fine against the English
-        description index) and searches the Qdrant vector database.
+        description index) and searches the Qdrant vector database built from
+        the model-written icon descriptions.  The pictogram images themselves
+        are never a source of information — they are only fetched by id for
+        the final display.
         ``mode``: ``semantic`` (descriptions + usage), ``synonyms``
         (synonyms/keywords), ``hybrid`` (both, rank-fused).
         ``boost`` re-ranks hits whose tags/categories/keywords/synonyms match

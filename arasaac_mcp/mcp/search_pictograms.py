@@ -24,8 +24,12 @@ def register(server: FastMCP, context: ServerContext) -> None:
     def search_pictograms(query: str, limit: int = 25) -> str:
         """Search ARASAAC pictograms by German keyword.
 
-        Searches descriptions plus the official metadata (synonyms, tags,
-        categories). Returns pictograms by WORD only, never by file name or id.
-        Call it per concept and try synonyms when the first search is weak.
+        Retrieval comes from the word layer only: the rich, model-written icon
+        descriptions (description, usage, synonyms) plus the official metadata
+        (German keywords, tags, categories).  The pictogram images themselves
+        are never a source of information — they are only fetched by id for
+        the final display. Returns pictograms by WORD only, never by file name
+        or id.  Call it per concept and try synonyms when the first search is
+        weak.
         """
         return search(context.catalog, query, limit)
