@@ -133,7 +133,6 @@ def build_records(
             pic_id=int(entry["id"]),
             label=catalog.label_of(pic),
             word=catalog.word_of(pic),
-            file_stem=Path(pic.file).stem,
             description=str(entry["description"]).strip(),
             usage=str(entry.get("usage") or "").strip(),
             synonyms=synonyms,
@@ -199,6 +198,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--recreate", action="store_true", help="Drop and rebuild the collection")
     parser.add_argument("--force", action="store_true", help="Re-upsert points already stored")
+    parser.add_argument(
+        "--refresh-payload",
+        action="store_true",
+        help="Rewrite only the payloads of stored points (no embedding, no new points)",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Only print the plan")
     args = parser.parse_args(argv)
 
@@ -230,6 +234,22 @@ def main(argv: list[str] | None = None) -> int:
         print("dry run: nothing written")
         return EXIT_OK
 
+    index = VectorIndex.open(args.qdrant_url, args.collection)
+
+    if args.refresh_payload:
+        if not index.collection_exists():
+            print(f"error: collection {args.collection!r} does not exist", file=sys.stderr)
+            return EXIT_FAILED
+        stored_ids = index.existing_ids()
+        refresh = [record for record in records if record.pic_id in stored_ids]
+        try:
+            overwritten = index.overwrite_payload(refresh)
+        except VectorDBError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_FAILED
+        print(f"refreshed payloads : {overwritten} of {len(refresh)}")
+        return EXIT_OK
+
     embedder = make_embedder(
         args.embed_provider,
         model=args.embed_model,
@@ -242,7 +262,6 @@ def main(argv: list[str] | None = None) -> int:
         backoff=args.embed_backoff,
         min_interval=args.embed_min_interval,
     )
-    index = VectorIndex.open(args.qdrant_url, args.collection)
 
     try:
         print(f"probing embedding dimension ({embedder.model_name})…")

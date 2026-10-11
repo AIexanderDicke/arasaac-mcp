@@ -81,7 +81,6 @@ class PicRecord:
     pic_id: int
     label: str
     word: str
-    file_stem: str
     description: str
     usage: str
     synonyms: tuple[str, ...]
@@ -102,7 +101,6 @@ class PicRecord:
             "id": self.pic_id,
             "label": self.label,
             "word": self.word,
-            "file_stem": self.file_stem,
             "description": self.description,
             "usage": self.usage,
             "synonyms": list(self.synonyms),
@@ -319,6 +317,30 @@ class VectorIndex:
             )
             written += len(points)
         return written
+
+    def overwrite_payload(self, records: list[PicRecord], *, batch: int = 256) -> int:
+        """Replace the whole payload of stored points — without re-embedding.
+
+        Used when the retrieval corpus changes (e.g. dropping filename data):
+        vectors stay untouched, only the indexed payload is rewritten.  One
+        server call per record because payloads differ per point.
+        """
+        changed = 0
+        for record in records:
+            _wrap(
+                partial(
+                    self.client.overwrite_payload,
+                    self.collection,
+                    payload=record.payload(),
+                    points=[record.pic_id],
+                    wait=True,
+                ),
+                self._url,
+                self.collection,
+                "overwrite_payload",
+            )
+            changed += 1
+        return changed
 
     # -- reading -----------------------------------------------------------
 

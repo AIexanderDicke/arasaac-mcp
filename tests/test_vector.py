@@ -41,7 +41,6 @@ def make_record(
         pic_id=pic_id,
         label=word,
         word=word,
-        file_stem=f"{pic_id}_{word}.png",
         description=description,
         usage=usage,
         synonyms=synonyms,

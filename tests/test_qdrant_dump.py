@@ -67,7 +67,6 @@ def test_export_then_import_round_trip(script: ModuleType, server_url: str, dump
         pic_id=4242,
         label="Anker",
         word="Anker",
-        file_stem="4242_Anker.png",
         description="A small boat anchor.",
         usage="Shipping, hope symbol.",
         synonyms=("anchor",),
