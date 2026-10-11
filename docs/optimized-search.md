@@ -5,6 +5,33 @@ searching over it — so the word layer
 [`arasaac_mcp/catalog.py`](../arasaac_mcp/catalog.py) finds the right icon from a
 natural request instead of from terse ARASAAC keywords alone.*
 
+## 0. Status (deviation from the plan below)
+
+The plan in §2–§3 was drawn against a **SQLite FTS5 hybrid lexical retrieval**
+with optional embedding re-rank. The retrieval layer was then built as a
+**Qdrant vector database from the start** instead:
+
+- Phase 1 (descriptions) is implemented and tracked in
+  [`icon-descriptions.md`](icon-descriptions.md); the English set ships as
+  `icons/descriptions.jsonl` (~13.8k records, git-tracked).
+- Phases 2–5 were replaced by the vector layer: `arasaac_mcp/embeddings.py`
+  (OpenAI-compatible endpoint — OpenRouter default, e.g. `qwen/qwen3-embedding-8b`,
+  or a local `sentence-transformers` model), `arasaac_mcp/vector.py`
+  (one Qdrant point per pictogram, `text` + `syn` named vectors, indexed
+  payload) and the MCP tool `semantic_search_pictograms` (modes
+  `semantic`/`synonyms`/`hybrid`, payload filters, deterministic class boost).
+  Ingest: `scripts/index_descriptions.py`; backup: `scripts/qdrant_dump.py`
+  (snapshot export/import); full manual test:
+  `scripts/semantic_search_manual.py`. See AGENTS.md §Vector search.
+- Rationale: no FTS integration cost, payload filters/boosts are native, and
+  the lexical `_score` path in `catalog.py` stays untouched (the tool is
+  added **alongside** `search_pictograms`, so the metadata-only, offline
+  behaviour of Phase 3's fallback is preserved by construction).
+- The evaluation set of Phase 5 is still open work; the manual script asserts
+  the label round-trip per demo query.
+
+The remaining sections describe the original plan for reference.
+
 ## 1. Goal and problem
 
 The model addresses pictograms **only by words** ([`AGENTS.md`](../AGENTS.md),

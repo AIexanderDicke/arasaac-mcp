@@ -45,15 +45,20 @@ core.
 | `arasaac_mcp/cli.py` | `make-sheet` CLI (entry point) |
 | `arasaac_mcp/catalog.py` | Word-based search/resolve (`Catalog`, `get_catalog`): the word→pictogram mapping underneath the tools; builds the whole index from `metadata_de.json` even with no PNGs, and `ensure()`/`path_of()` materialise a pictogram (local file or lazy fetch) |
 | `arasaac_mcp/fetch.py` | On-demand ARASAAC download (stdlib only): one pictogram → cache, atomic write, size fallback |
-| `arasaac_mcp/mcp/` | `arasaac-mcp` MCP server **package**: one file per tool (`search_pictograms.py`, `view_pictogram.py`, `render_pictogram_sheet.py`, `render_pictogram_layout.py`) plus `server.py` (builds the server), `context.py` (catalog + output dir), `media.py` (image/URL results), `resources.py` (prompt + skill), `routes.py` (`GET /sheet/<name>`) |
+| `arasaac_mcp/embeddings.py` | Embedding clients for the vector layer: OpenAI-compatible endpoint (OpenRouter default) + local `sentence-transformers`, retries/pace, `ARASAAC_EMBED_*` |
+| `arasaac_mcp/mcp/` | `arasaac-mcp` MCP server **package**: one file per tool (`search_pictograms.py`, `semantic_search_pictograms.py`, `view_pictogram.py`, `render_pictogram_sheet.py`, `render_pictogram_layout.py`) plus `server.py` (builds the server), `context.py` (catalog + output dir), `media.py` (image/URL results), `resources.py` (prompt + skill), `routes.py` (`GET /sheet/<name>`) |
+| `arasaac_mcp/vector.py` | Qdrant vector layer for the MCP server: one point per pictogram (`text`/`syn` vectors + indexed payload), search modes (`semantic`/`synonyms`/`hybrid`), payload filters, deterministic tag boost |
 | `arasaac_mcp/skill.py` | Locates the thin Agent Skill and the packaged recipe parts for the MCP prompt/resources |
 | `scripts/build_skill.py` | Generates `skills/` + `arasaac_mcp/recipe/` from `scripts/prompt.md` (`--check` for drift) |
 | `scripts/test_mcp.py` | Offline catalog + MCP tests (in-memory client, no LLM) |
+| `scripts/index_descriptions.py` | Ingest script: embeds description records into the Qdrant vector database (resumable, `--recreate`, `--dry-run`) |
+| `scripts/qdrant_dump.py` | Qdrant snapshot export/import (`export`/`import` subcommands, dumps into `./dumps`) |
+| `scripts/semantic_search_manual.py` | Full manual test: DB stats + demo queries in all modes + label round-trip assert |
 | `scripts/mcp_up.sh` | Start/restart relay + MCP server in tmux without killing the VS Code forwarded port |
 | `scripts/port_relay.py` | Stable TCP relay in front of the MCP server (keeps the forwarded port bound) |
 | `skills/arasaac/` | **generated** thin Agent Skill (`SKILL.md` only); do not edit by hand |
 | `arasaac_mcp/recipe/` | **generated** recipe parts, served as `arasaac://rules/<part>` resources; do not edit by hand |
-| `Dockerfile`, `docker-compose.yml`, `.dockerignore` | Metadata-only image (code + fonts + `metadata_de.json`); pictograms are fetched on demand, no API key |
+| `Dockerfile`, `docker-compose.yml`, `.dockerignore` | Metadata-only image (code + fonts + `metadata_de.json`); pictograms are fetched on demand, no API key. Compose also starts the **qdrant** service (vector DB, port 6333) |
 | `.github/workflows/tests.yml` | CI: `ruff check`, `ruff format --check`, `mypy`, `pytest` (+ coverage) and the skill drift check |
 | `.github/workflows/docker.yml` | CI: runs the checks, builds the metadata-only image, smoke-tests it, and publishes it to GHCR **only on pushes to `main`**; never downloads the pictogram set |
 | `examples/mcp.json` | MCP host config template (stdio) |
@@ -64,7 +69,7 @@ core.
 | `output/` | **gitignored**, generated sheets |
 | `scripts/prompt.md`, `README.md`, `docs/` | Docs |
 | `docs/multilingual.md` | Plan: supporting the 12 well-covered ARASAAC languages (per-request `lang` param, design decisions, phases, per-language invariants) |
-| `docs/optimized-search.md` | Plan: LLM-generated structured per-icon descriptions (per language) + a retrieval layer (SQLite FTS5 hybrid lexical search, optional embeddings) |
+| `docs/optimized-search.md` | Plan: LLM-generated structured per-icon descriptions (per language) + a retrieval layer — **implemented as the Qdrant vector layer** (not SQLite FTS5, see the deviation note at the top of the doc) |
 | `examples/` | Sample layout JSON: `stundenplan.json` (grid), `karten.json` (cards + arrow) |
 
 ## Setup
@@ -127,6 +132,15 @@ every small edit; they are the final gate, not an inner-loop step.
 | `ARASAAC_FETCH` | catalog, MCP | `auto` (default) fetches a missing pictogram live; `off` fails instead (offline) |
 | `ARASAAC_FETCH_SIZE` | catalog, MCP | Icon width to request from ARASAAC (default `500`; falls back to `300`/`2500`) |
 | `ARASAAC_STATIC_URL` | fetch | Override the ARASAAC static server (tests use `file://…`) |
+| `ARASAAC_QDRANT_URL` | vector | Qdrant REST URL (default `http://127.0.0.1:6333`; compose service: `http://qdrant:6333`) |
+| `ARASAAC_QDRANT_COLLECTION` | vector | Collection name for the pictogram vectors (default `arasaac_en`) |
+| `ARASAAC_EMBED_PROVIDER` | vector | `openai` (default, any OpenAI-compatible endpoint) or `local` (`sentence-transformers`) |
+| `ARASAAC_EMBED_MODEL` | vector | Embedding model (`qwen/qwen3-embedding-8b` for openai, `Qwen/Qwen3-Embedding-0.6B` for local) |
+| `ARASAAC_EMBED_API_KEY` | vector | Key for the embeddings endpoint (falls back to `OPENROUTER_API_KEY`) |
+| `ARASAAC_EMBED_BASE_URL` | vector | OpenAI-compatible base URL (default OpenRouter `https://openrouter.ai/api/v1`) |
+| `ARASAAC_EMBED_BATCH_SIZE` / `ARASAAC_EMBED_RETRIES` | vector | Texts per request (64) / retry attempts (6) |
+| `ARASAAC_EMBED_BACKOFF` / `ARASAAC_EMBED_MIN_INTERVAL` | vector | Retry backoff seconds (2) / minimum seconds between requests (0; ~3.5 for rate-limited free models) |
+| `ARASAAC_EMBED_DEVICE` | vector | Torch device for the local embedder (default auto) |
 | `ARASAAC_OUTPUT_DIR` | MCP | Where debug renders are written (default `./output`) |
 | `ARASAAC_PUBLIC_BASE_URL` | MCP | Base URL for image links (default `http://localhost:8000`) |
 | `ARASAAC_TRANSPORT` | MCP | `stdio` (default), `http` or `sse` |
@@ -207,7 +221,10 @@ or `WxH`.
 ### MCP server — `arasaac-mcp`
 
 The host brings the model; the server runs **no LLM** and needs **no API key** —
-it only searches, shows and renders pictograms.
+it only searches, shows and renders pictograms. (The optional vector search
+`semantic_search_pictograms` calls the embeddings endpoint / local model
+configured via `ARASAAC_EMBED_*` and reports a clear message when Qdrant or
+the embedder are not available; see [Vector search](#vector-search-qdrant--embeddings).)
 
 ```bash
 uv run arasaac-mcp                    # stdio (default)
@@ -218,6 +235,7 @@ uv run python scripts/test_mcp.py     # offline tests, no LLM
 | Surface | Name | Purpose |
 | --- | --- | --- |
 | tool | `search_pictograms` | German word search (descriptions + metadata) |
+| tool | `semantic_search_pictograms` | Vector search over the icon descriptions (Qdrant; modes `semantic`/`synonyms`/`hybrid`) |
 | tool | `view_pictogram` | pictogram icon — URL-based (image block only with `--no-save`) |
 | tool | `render_pictogram_sheet` | ordered word sequence → strip image |
 | tool | `render_pictogram_layout` | layout tree (grid/cards/canvas) → image |
@@ -267,6 +285,42 @@ scripts/mcp_up.sh --force        # restart only the MCP server
 
 Both run in tmux (`arasaac-relay`, `arasaac-mcp`); logs in
 `/tmp/arasaac-relay.log` and `/tmp/arasaac-mcp.log`.
+
+### Vector search (Qdrant + embeddings)
+
+The LLM icon descriptions (`icons/descriptions.jsonl`, English, ~13.8k records)
+are embedded into a **Qdrant** collection so the MCP tool
+`semantic_search_pictograms` can find pictograms from natural (German or
+English) requests — its word-contract invariant holds: results are labels that
+`Catalog.resolve` round-trips. The DB runs **only as a Docker container**
+(`docker compose up -d qdrant`, port 6333; compose service name `qdrant`);
+interaction goes through the `qdrant-client` library.
+
+```bash
+docker compose up -d qdrant                      # start the vector DB
+uv run python scripts/index_descriptions.py --dry-run    # plan the ingest
+uv run python scripts/index_descriptions.py \
+  --embed-model qwen/qwen3-embedding-8b          # full ingest (resumable)
+uv run python scripts/qdrant_dump.py export      # snapshot -> dumps/
+uv run python scripts/qdrant_dump.py import <…>.snapshot --collection arasaac_en_copy --replace
+uv run python scripts/semantic_search_manual.py  # full manual test
+```
+
+Design (enforced by `arasaac_mcp/vector.py`): one point per pictogram (id =
+ARASAAC id), two named vectors — `text` (description + usage) and `syn`
+(synonyms + German keywords + tags) — payload `label`/`keywords`/`synonyms`/
+`tags`/`categories` with keyword indexes; search modes `semantic`, `synonyms`
+(hits the `syn` vector) and `hybrid` (reciprocal-rank fusion of both); optional
+`boost` re-ranks hits whose indexed payload fields share query tokens;
+`tags`/`categories` parameters filter. Switching the embedding model needs
+`--recreate` (vectors are incompatible across models). For rate-limited free
+models set `ARASAAC_EMBED_MIN_INTERVAL` ≈ `3.5`.
+
+The offline suite (`tests/test_vector.py`, `tests/test_embeddings.py`,
+`tests/test_mcp_semantic_search.py`, `tests/test_index_descriptions.py`) uses
+Qdrant's in-memory client and a deterministic `HashingEmbedder` — no Docker,
+no model, no network; `tests/test_qdrant_dump.py` exercises the snapshot
+round-trip against a live server and skips when none is running.
 
 ### Icons: local-first, fetched on demand
 

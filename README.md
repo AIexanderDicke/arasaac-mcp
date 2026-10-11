@@ -78,6 +78,18 @@ dedicated vision model) or the free `space-bunny-free`; OpenRouter:
 (cheapest solid), `qwen/qwen3.8-27b:free` (free trial). Any model still
 overridable with `--model`.
 
+## Semantic search (Qdrant vector database)
+
+The generated descriptions power a **vector search**: `docker compose up -d
+qdrant` starts the database, `scripts/index_descriptions.py` embeds every
+description into it, and an MCP host can call `semantic_search_pictograms`
+(semantic / synonyms / hybrid modes, tag filters and a class boost) next to the
+classic lexical `search_pictograms`. `scripts/qdrant_dump.py` exports/imports a
+snapshot as backup and `scripts/semantic_search_manual.py` runs a full manual
+test — setup, commands and configuration live in
+[`AGENTS.md`](AGENTS.md#vector-search-qdrant--embeddings) (implementation plan:
+[`docs/optimized-search.md`](docs/optimized-search.md)).
+
 ## License & attribution
 
 This project uses the pictograms of [ARASAAC](https://arasaac.org) (the Aragonese
