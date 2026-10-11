@@ -10,6 +10,7 @@ requires-python = ">=3.13"
 dependencies = [
     "pillow>=12.3.0",
     "fastmcp>=2.0",
+    "qdrant-client>=1.19.1",
 ]
 
 [project.scripts]
@@ -31,6 +32,7 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.16.8",
+    "sentence-transformers>=6.1.0",
 ]
 
 [tool.ruff]
