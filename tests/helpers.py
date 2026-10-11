@@ -80,3 +80,32 @@ def build_static_tree(static: Path, pic_ids: Iterable[int], size: int = 500) -> 
     for pic_id in pic_ids:
         make_png(static / str(pic_id) / f"{pic_id}_{size}.png")
     return static
+
+
+class HashingEmbedder:
+    """Deterministic, offline stand-in for an :class:`arasaac_mcp.embeddings.Embedder`.
+
+    Documents embed as the unit-normalised sum of per-token indicator vectors
+    (64 dimensions, index = ``crc32(token) % 64``), so texts sharing tokens have
+    a high cosine similarity — enough for meaningful vector-search assertions
+    without a model download.  ``is_query`` is accepted and ignored.
+    """
+
+    DIM = 64
+
+    def __init__(self, model_name: str = "hashing-test") -> None:
+        self.model_name = model_name
+
+    def embed(self, texts: Iterable[str], *, is_query: bool = False) -> list[list[float]]:
+        import zlib
+
+        vectors: list[list[float]] = []
+        for text in texts:
+            vector = [0.0] * self.DIM
+            for token in text.lower().split():
+                clean = "".join(ch for ch in token if ch.isalnum())
+                if clean:
+                    vector[zlib.crc32(clean.encode("utf-8")) % self.DIM] += 1.0
+            norm = sum(value * value for value in vector) ** 0.5
+            vectors.append([value / norm if norm else 0.0 for value in vector])
+        return vectors
