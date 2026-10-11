@@ -1,4 +1,13 @@
 services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
+    volumes:
+      - qdrant-storage:/qdrant/storage
+    restart: unless-stopped
+
   arasaac-mcp:
     build: .
     image: arasaac-mcp
@@ -11,11 +20,18 @@ services:
       ARASAAC_PUBLIC_BASE_URL: ${ARASAAC_PUBLIC_BASE_URL:-http://localhost:8000}
       # auto (default) fetches missing pictograms from ARASAAC; off is offline.
       ARASAAC_FETCH: ${ARASAAC_FETCH:-auto}
+      ARASAAC_QDRANT_URL: ${ARASAAC_QDRANT_URL:-http://qdrant:6333}
+      ARASAAC_EMBED_PROVIDER: ${ARASAAC_EMBED_PROVIDER:-openai}
+      ARASAAC_EMBED_MODEL: ${ARASAAC_EMBED_MODEL:-qwen/qwen3-embedding-8b}
+      ARASAAC_EMBED_API_KEY: ${ARASAAC_EMBED_API_KEY:-}
     volumes:
       - arasaac-output:/app/output
       - arasaac-cache:/app/cache
     restart: unless-stopped
+    depends_on:
+      - qdrant
 
 volumes:
+  qdrant-storage:
   arasaac-output:
   arasaac-cache:
