@@ -87,19 +87,26 @@ tools resolve words to images internally.
 
 ## 4. Tools you have
 
-You have exactly four tools. Use only these.
+You have exactly five tools. Use only these.
 
 1. **`search_pictograms({ query, limit? })`** — search words plus the official
    ARASAAC metadata (synonyms, tags, categories). Call it separately per
    concept and try synonyms. Example: `search_pictograms({ query: "Auto" })`
    also surfaces `PKW`, `KFZ`.
-2. **`view_pictogram({ word })`** — return the image for a word. Use it for
+2. **`semantic_search_pictograms({ query, limit?, mode?, boost? })`** — vector
+   search over rich, model-written icon descriptions. Use it when the lexical
+   search fails or the concept is a *situation* rather than a word (e.g.
+   `"Kind lernt schreiben"`, `"Hund läuft über Wiese"`); German sentences work
+   even though the index is English. Modes: `semantic` (default),
+   `synonyms`, `hybrid`; `boost` tilts results towards tags/categories that
+   match the query. The word contract is the same: it returns words only.
+3. **`view_pictogram({ word })`** — return the image for a word. Use it for
    ambiguous or surprising candidates before you select them.
-3. **`render_pictogram_sheet({ words, roles?, sentence?, meaning?, labels?,
+4. **`render_pictogram_sheet({ words, roles?, sentence?, meaning?, labels?,
    columns?, icon_size? })`** — render the chosen word sequence to a **strip**
    (one line, wrapping into rows) and return it. Call it once for the
    **primary** sequence before finishing.
-4. **`render_pictogram_layout({ layout, sentence?, meaning?, page_size?,
+5. **`render_pictogram_layout({ layout, sentence?, meaning?, page_size?,
    labels?, icon_size? })`** — render a **free arrangement** (table/timetable,
    cards, connector arrows, absolute positions). See §9. Use it instead of the
    strip whenever the pictograms are not one straight sequence.
