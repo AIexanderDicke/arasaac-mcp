@@ -223,12 +223,19 @@ class Catalog:
         self.static_url = static_url
         self._pics = _load_index(self.icons_dir)
         self._counts: dict[str, int] | None = None
+        self._by_id: dict[int, Pictogram] | None = None
 
     # -- indexing ----------------------------------------------------------
 
     @property
     def pictures(self) -> list[Pictogram]:
         return self._pics
+
+    def by_id(self, pic_id: int) -> Pictogram | None:
+        """The pictogram with this ARASAAC id, or ``None``."""
+        if self._by_id is None:
+            self._by_id = {pic.pic_id: pic for pic in self._pics if pic.pic_id is not None}
+        return self._by_id.get(pic_id)
 
     def _keyword_counts(self) -> dict[str, int]:
         """How many pictograms share each keyword (used for qualifiers)."""
