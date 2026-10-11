@@ -476,11 +476,6 @@ def test_resolve_layout_node_keeps_grid_cell_positions(catalog: Catalog) -> None
 
 
 @pytest.mark.regression
-@pytest.mark.xfail(
-    reason="The layout engine treats an empty-string grid cell as empty "
-    "(layout._cell_node), but catalog.resolve_layout_node resolves it as a "
-    "word and raises KeyError before rendering.",
-)
 def test_resolve_layout_node_empty_cell_string_is_empty(catalog: Catalog) -> None:
     node = catalog.resolve_layout_node(
         {"type": "grid", "columns": ["A"], "rows": [{"cells": [""]}]}

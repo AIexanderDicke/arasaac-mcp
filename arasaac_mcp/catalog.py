@@ -444,6 +444,12 @@ class Catalog:
             **extra,
         }
 
+    def _resolve_cell(self, cell: object) -> dict | None:
+        """Resolve a grid cell, keeping its position (an empty cell = ``None``)."""
+        if isinstance(cell, str) and not cell.strip():
+            return None
+        return self.resolve_layout_node(cell)
+
     def resolve_layout_node(self, node: object) -> dict | None:
         """Recursively replace ``word`` with ``file``/``concept`` in a layout tree.
 
@@ -496,16 +502,16 @@ class Catalog:
                 out[key] = self.resolve_layout_node(out[key])
         if isinstance(out.get("cells"), list):
             # Keep positions: an empty cell is `None`, not a removed entry.
-            out["cells"] = [self.resolve_layout_node(cell) for cell in out["cells"]]
+            out["cells"] = [self._resolve_cell(cell) for cell in out["cells"]]
         if isinstance(out.get("rows"), list):
             rows: list[object] = []
             for row in out["rows"]:
                 if isinstance(row, list):
-                    rows.append({"cells": [self.resolve_layout_node(cell) for cell in row]})
+                    rows.append({"cells": [self._resolve_cell(cell) for cell in row]})
                 elif isinstance(row, dict):
                     copy = dict(row)
                     if isinstance(copy.get("cells"), list):
-                        copy["cells"] = [self.resolve_layout_node(cell) for cell in copy["cells"]]
+                        copy["cells"] = [self._resolve_cell(cell) for cell in copy["cells"]]
                     rows.append(copy)
                 else:
                     rows.append(row)
