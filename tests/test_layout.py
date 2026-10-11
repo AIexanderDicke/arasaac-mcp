@@ -71,11 +71,6 @@ def test_load_font_honours_env_font(repo_root: Path, monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.regression
-@pytest.mark.xfail(
-    reason="arasaac_mcp/layout.py resolves the bundled fonts with parents[2], "
-    "which points above the repo root in the flat layout; the bundled Noto Sans "
-    "is never found and the umlaut-incapable Pillow default is used instead.",
-)
 def test_load_font_uses_bundled_noto_sans_without_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -144,8 +144,9 @@ def _font_candidates(bold: bool) -> Iterable[Path]:
         else:
             yield env_path.with_name(f"{env_path.stem}-Bold{env_path.suffix}")
 
-    # Fonts shipped with this repository.
-    bundled = Path(__file__).resolve().parents[2] / "assets" / "fonts"
+    # Fonts shipped with this repository (flat layout: repo root = parent of
+    # the package directory).
+    bundled = Path(__file__).resolve().parents[1] / "assets" / "fonts"
     for name in filenames:
         yield bundled / name
 
