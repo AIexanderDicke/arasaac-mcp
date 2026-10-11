@@ -157,11 +157,12 @@ async def exercise() -> None:
             tools
             == {
                 "search_pictograms",
+                "semantic_search_pictograms",
                 "view_pictogram",
                 "render_pictogram_sheet",
                 "render_pictogram_layout",
             },
-            f"four tools registered ({sorted(tools)})",
+            f"five tools registered ({sorted(tools)})",
         )
         prompts = {prompt.name for prompt in await client.list_prompts()}
         check("pictogram_transcriber" in prompts, "prompt registered")

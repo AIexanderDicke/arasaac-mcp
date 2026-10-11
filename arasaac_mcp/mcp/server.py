@@ -26,6 +26,7 @@ from .render_pictogram_sheet import register as register_render_sheet
 from .resources import register as register_resources
 from .routes import register as register_routes
 from .search_pictograms import register as register_search
+from .semantic_search_pictograms import register as register_semantic_search
 from .view_pictogram import register as register_view
 
 
@@ -58,6 +59,7 @@ def create_server(
     context = ServerContext(catalog=catalog, output_dir=debug_dir)
 
     register_search(server, context)
+    register_semantic_search(server, context)
     register_view(server, context)
     register_render_sheet(server, context)
     register_render_layout(server, context)

@@ -12,6 +12,7 @@ Each tool lives in its own module (one file per tool):
 Tool                                          Module
 ===========================================  =================================================
 ``search_pictograms``                         :mod:`.search_pictograms`
+``semantic_search_pictograms``                :mod:`.semantic_search_pictograms`
 ``view_pictogram``                            :mod:`.view_pictogram`
 ``render_pictogram_sheet``                    :mod:`.render_pictogram_sheet`
 ``render_pictogram_layout``                   :mod:`.render_pictogram_layout`

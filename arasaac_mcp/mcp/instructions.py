@@ -9,5 +9,10 @@ Work out the core message first (a request for a picture is satisfied by
 depicting its content, not the request), drop function words, choose concrete
 icons, verify ambiguous candidates with view_pictogram, keep the sequence short
 (aim ≤ 5, hard cap ~8) and render it once. Reply in German. See the
-`pictogram_transcriber` prompt for the full rules.\
+`pictogram_transcriber` prompt for the full rules.
+
+For a natural request or a description rather than a single word, prefer
+`semantic_search_pictograms` (vector search over the icon descriptions; German
+queries work even though the index is English) and fall back to
+`search_pictograms` (exact German keyword match) for single words.\
 """

@@ -38,11 +38,12 @@ def server(icons_dir: Path, output_dir: Path):
 # --------------------------------------------------------------------------- #
 
 
-async def test_server_registers_the_four_tools(server) -> None:
+async def test_server_registers_the_five_tools(server) -> None:
     async with Client(server) as client:
         tools = {tool.name for tool in await client.list_tools()}
     assert tools == {
         "search_pictograms",
+        "semantic_search_pictograms",
         "view_pictogram",
         "render_pictogram_sheet",
         "render_pictogram_layout",
