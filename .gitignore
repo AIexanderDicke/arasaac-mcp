@@ -18,6 +18,9 @@ coverage.xml
 htmlcov/
 .pytest_cache/
 
+# Qdrant snapshot dumps (scripts/qdrant_dump.py)
+dumps/
+
 # content directories
 icons/*
 # the word index and the generated English descriptions ship in the repo;
