@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
-from helpers import build_icons_dir, make_png
+from helpers import build_icons_dir, make_png, write_descriptions
 
 from arasaac_mcp.catalog import (
     VALID_ROLES,
@@ -42,25 +42,17 @@ def test_pictures_index_metadata_entries(catalog: Catalog) -> None:
     assert by_file["2_Auto.png"].keywords == ("Auto", "KFZ")
 
 
-def test_pictures_include_unindexed_files(catalog: Catalog) -> None:
-    by_file = {pic.file: pic for pic in catalog.pictures}
-    assert by_file["999_unlisted.png"].keywords == ()
-    assert by_file["999_unlisted.png"].pic_id == 999
-    assert by_file["orphan.png"].pic_id is None
+def test_pngs_are_never_a_retrieval_source(catalog: Catalog) -> None:
+    """The PNG set must not feed the index: unlisted files stay invisible."""
+    files = {pic.file for pic in catalog.pictures}
+    assert "999_unlisted.png" not in files
+    assert "orphan.png" not in files
+    with pytest.raises(KeyError):
+        catalog.resolve("unlisted")
 
 
-@pytest.mark.regression
-@pytest.mark.xfail(
-    reason="With metadata_de.json present, files that do not match "
-    "[id]_[description].png are added to the index twice: once by the "
-    "metadata branch and again via the `unindexed` list appended afterwards.",
-)
-def test_unindexed_file_is_indexed_once(catalog: Catalog) -> None:
-    files = [pic.file for pic in catalog.pictures]
-    assert files.count("orphan.png") == 1
-
-
-def test_index_falls_back_to_filenames_without_metadata(tmp_path: Path) -> None:
+def test_index_ignores_pngs_without_metadata(tmp_path: Path) -> None:
+    """Without metadata there is no retrieval source - nothing is indexed."""
     icons = tmp_path / "icons"
     icons.mkdir()
     make_png(icons / "3123_Regen.png")
@@ -68,11 +60,26 @@ def test_index_falls_back_to_filenames_without_metadata(tmp_path: Path) -> None:
 
     catalog = Catalog(icons)
 
-    by_file = {pic.file: pic for pic in catalog.pictures}
-    assert by_file["3123_Regen.png"].desc == "Regen"
-    assert by_file["3123_Regen.png"].pic_id == 3123
-    assert by_file["no_id.png"].pic_id is None
-    assert catalog.search_lines("Regen", 5)
+    assert catalog.pictures == []
+    assert catalog.search_lines("Regen") == []
+
+
+def test_metadata_entry_without_keywords_falls_back_to_stem(tmp_path: Path) -> None:
+    icons = tmp_path / "icons"
+    icons.mkdir()
+    (icons / "metadata_de.json").write_text(
+        json.dumps([{"_id": 7}, {"_id": 2, "keywords": [{"keyword": "Berg"}]}]),
+        encoding="utf-8",
+    )
+
+    catalog = Catalog(icons)
+
+    stem_only = catalog.by_id(7)
+    berg = catalog.by_id(2)
+    assert stem_only is not None and berg is not None
+    assert stem_only.file == "7.png"
+    assert catalog.word_of(stem_only) == "7"
+    assert catalog.word_of(berg) == "Berg"
 
 
 def test_missing_icons_dir_yields_empty_catalog(tmp_path: Path) -> None:
@@ -120,13 +127,6 @@ def test_metadata_only_catalog_resolves_to_fetchable_id(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 # word / label logic
 # --------------------------------------------------------------------------- #
-
-
-def test_word_of_prefers_first_keyword_else_description(catalog: Catalog) -> None:
-    regen = catalog.resolve("Regen")
-    unlisted = next(pic for pic in catalog.pictures if pic.file == "999_unlisted.png")
-    assert catalog.word_of(regen) == "Regen"
-    assert catalog.word_of(unlisted) == "unlisted"
 
 
 def test_label_of_unique_word_is_plain(catalog: Catalog) -> None:
@@ -178,8 +178,49 @@ def test_search_matches_prefix_and_substring(catalog: Catalog) -> None:
     assert _labels(catalog.search_lines("egen", 5)) == ["Regen"]
 
 
-def test_search_matches_description_of_unindexed_file(catalog: Catalog) -> None:
-    assert _labels(catalog.search_lines("unlisted", 5)) == ["unlisted"]
+def test_search_matches_description_text(tmp_path: Path) -> None:
+    """Search draws on description files: an English-only match finds the icon."""
+    icons = build_icons_dir(tmp_path / "library")
+    write_descriptions(
+        icons,
+        {7: ("A rain shower seen through a window.", "Rain, weather.", ["shower", "wet weather"])},
+    )
+    catalog = Catalog(icons)
+
+    labels = _labels(catalog.search_lines("shower window", 5))
+    assert labels == ["Berg"]  # id 7 is the 'Berg' pictogram in the fixture
+    assert _labels(catalog.search_lines("rain weather", 5)) == ["Berg"]
+    assert _labels(catalog.search_lines("shower", 5)) == ["Berg"]
+
+
+def test_search_description_tokens_still_require_all_tokens(tmp_path: Path) -> None:
+    icons = build_icons_dir(tmp_path / "library")
+    write_descriptions(
+        icons,
+        {7: ("A rain shower seen through a window.", "Rain, weather.", ["shower"])},
+    )
+    catalog = Catalog(icons)
+    assert catalog.search_lines("shower zebra", 5) == []
+
+
+def test_search_identical_without_descriptions(tmp_path: Path) -> None:
+    """Parity: no description files must not change any result."""
+    icons = build_icons_dir(tmp_path / "library")
+    query = "Regen"
+    baseline = _labels(Catalog(icons).search_lines(query, 12))
+
+    write_descriptions(icons, {7: ("Something unrelated.", "", [])})
+    assert _labels(Catalog(icons).search_lines(query, 12)) == baseline
+
+
+def test_search_description_lifts_a_candidate(tmp_path: Path) -> None:
+    """A description match must rank eligible candidates more highly."""
+    icons = build_icons_dir(tmp_path / "library")
+    # Both candidates match "Auto"; only one mentions the qualifier in English.
+    write_descriptions(icons, {3: ("A wagon, a four-wheeled cart.", "Vehicle.", ["wagon"])})
+    catalog = Catalog(icons)
+    labels = _labels(catalog.search_lines("Auto wagon", 5))
+    assert labels and labels[0] == "Auto (Wagen)"
 
 
 def test_search_requires_all_tokens(catalog: Catalog) -> None:
@@ -290,13 +331,20 @@ def test_ensure_without_fetch_raises(catalog: Catalog) -> None:
 def test_ensure_without_id_raises_even_when_fetching(tmp_path: Path) -> None:
     icons = tmp_path / "icons"
     icons.mkdir()
-    orphan = make_png(icons / "orphan.png")
     catalog = Catalog(icons, fetch_missing=True)
-    pic = catalog.resolve("orphan")
-    orphan.unlink()  # the local file wins; only a missing one may be fetched
+    pic = Pictogram("orphan.png", "orphan")  # e.g. metadata entry without _id
 
     with pytest.raises(FileNotFoundError, match="no ARASAAC id"):
         catalog.ensure(pic)
+
+
+def test_ensure_locates_by_id_prefix_not_filename(catalog: Catalog, icons_dir: Path) -> None:
+    """Display: any local ``<id>_*.png`` is usable, whatever its name says."""
+    regen = catalog.resolve("Regen")
+    (icons_dir / regen.file).unlink()
+    make_png(icons_dir / "1_total_other_name.png")
+
+    assert catalog.ensure(regen) == icons_dir / "1_total_other_name.png"
 
 
 def test_ensure_fetches_into_the_cache_and_is_then_local(tmp_path: Path) -> None:

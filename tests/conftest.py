@@ -22,6 +22,7 @@ if str(Path(__file__).resolve().parent) not in sys.path:
 from helpers import build_icons_dir  # noqa: E402
 
 from arasaac_mcp.catalog import _CATALOG_CACHE, _INDEX_CACHE, Catalog  # noqa: E402
+from arasaac_mcp.descriptions import _CACHE as _DESCRIPTIONS_CACHE  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -29,9 +30,11 @@ def _isolate_caches() -> None:
     """Keep the module-level index/catalog caches from leaking between tests."""
     _INDEX_CACHE.clear()
     _CATALOG_CACHE.clear()
+    _DESCRIPTIONS_CACHE.clear()
     yield
     _INDEX_CACHE.clear()
     _CATALOG_CACHE.clear()
+    _DESCRIPTIONS_CACHE.clear()
 
 
 @pytest.fixture

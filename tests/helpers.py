@@ -82,6 +82,22 @@ def build_static_tree(static: Path, pic_ids: Iterable[int], size: int = 500) -> 
     return static
 
 
+def write_descriptions(icons_dir: Path, records: dict[int, tuple[str, str, list[str]]]) -> Path:
+    """Write a ``descriptions.jsonl`` retrieval corpus next to the metadata.
+
+    By default the synthetic library has **no** descriptions, so the usual
+    tests exercise the absent-safe metadata-only behaviour; only the tests
+    that target description-based retrieval call this.
+    """
+    lines = [
+        json.dumps({"id": pic_id, "description": description, "usage": usage, "synonyms": synonyms})
+        for pic_id, (description, usage, synonyms) in records.items()
+    ]
+    path = icons_dir / "descriptions.jsonl"
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
 class HashingEmbedder:
     """Deterministic, offline stand-in for an :class:`arasaac_mcp.embeddings.Embedder`.
 

@@ -3,15 +3,16 @@
 This is the word-based core behind the MCP server.  The caller searches and
 refers to pictograms by German **word**, never by numeric id or file name.
 
-The catalog reads ``[id]_[description].png`` files plus the optional
-``metadata_de.json`` shipped alongside them (ARASAAC keywords, tags and
-categories).  Keep this module free of host specifics and of Pillow: it only
-maps words to pictograms.
+Retrieval is built from words only: the description records
+(``icons/descriptions.jsonl`` or ``icons/descriptions/<lang>/…``, see
+:mod:`arasaac_mcp.descriptions`) plus the ``metadata_de.json`` shipped alongside
+them (German keywords, tags, categories).  The pictogram PNG set is **never**
+a source of retrieval information — files are located by id only for the final
+display, and ``ensure`` fetches by ARASAAC id on demand
+(:mod:`arasaac_mcp.fetch`).
 
-``metadata_de.json`` is enough to build the whole index: when the matching PNG
-is absent, the catalog synthesises the filename ``download_icons.py`` would have
-written and — if ``fetch_missing`` is on — downloads it on demand into a
-write-through cache (see :mod:`arasaac_mcp.fetch`).
+Keep this module free of host specifics and of Pillow: it only maps words to
+pictograms.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+from .descriptions import DescriptionRecord, load_descriptions
 from .fetch import PictogramFetchError, fetch_pictogram
 
 #: Roles accepted in layout trees (Fitzgerald key, see ``scripts/prompt.md``).
@@ -76,8 +78,18 @@ def _tokenize(query: str) -> list[str]:
     return [token.lower() for token in re.findall(r"[^\W_]+", query)]
 
 
-def _score(pic: Pictogram, tokens: Iterable[str]) -> float:
-    """Higher is better.  Every token must match somewhere (AND)."""
+def _score(
+    pic: Pictogram, tokens: Iterable[str], description: DescriptionRecord | None = None
+) -> float:
+    """Higher is better.  Every token must match somewhere (AND).
+
+    Sources, in descending value: an exact/partial German keyword, an exact
+    synonym from the LLM description files, a (longer-token) fragment of the
+    description text, and lastly the official tags/categories.  The pictogram
+    PNG set is not a source: ``desc`` is metadata-derived words only.
+    """
+    text = description.text.lower() if description else ""
+    synonyms = [synonym.lower() for synonym in (description.synonyms if description else ())]
     total = 0.0
     for token in tokens:
         best = 0
@@ -91,7 +103,9 @@ def _score(pic: Pictogram, tokens: Iterable[str]) -> float:
                 best = max(best, 4)
             elif token in value:
                 best = max(best, 2)
-        if token in pic.desc.lower():
+        if token in synonyms:
+            best = max(best, 4)
+        elif len(token) >= 4 and token in text:
             best = max(best, 3)
         for value in pic.extra:
             if token in value.lower():
@@ -126,43 +140,22 @@ def _synthesize_file(pic_id: int, entry: dict) -> str:
 
 
 def _load_index(icons_dir: Path) -> list[Pictogram]:
+    """Build the word view purely from ``metadata_de.json`` — never from the
+    pictogram PNG set (retrieval uses metadata + description data only)."""
     key = str(icons_dir)
     cached = _INDEX_CACHE.get(key)
     if cached is not None:
         return cached
 
-    try:
-        files = sorted(
-            (name for name in os.listdir(icons_dir) if name.endswith(".png")),
-            key=_natural_key,
-        )
-    except FileNotFoundError:
-        files = []
-
-    by_id: dict[int, str] = {}
-    desc_by_id: dict[int, str] = {}
-    unindexed: list[Pictogram] = []
-    for file in files:
-        match = re.match(r"^(\d+)_(.*)\.png$", file)
-        if match:
-            by_id[int(match.group(1))] = file
-            desc_by_id[int(match.group(1))] = match.group(2).replace("_", " ")
-        else:
-            unindexed.append(Pictogram(file, file))
-
-    pics: list[Pictogram] = []
     metadata_path = icons_dir / "metadata_de.json"
+    pics: list[Pictogram] = []
     if metadata_path.is_file():
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        seen: set[str] = set()
         for entry in metadata:
             pic_id = entry.get("_id")
             if pic_id is None:
                 continue
-            # With no local PNG we still index the entry and remember its
-            # filename and ARASAAC id, so a render can fetch it on demand.
-            file = by_id.get(pic_id) or _synthesize_file(pic_id, entry)
-            seen.add(file)
+            file = _synthesize_file(pic_id, entry)
             keywords = tuple(
                 str(item.get("keyword", "")).strip()
                 for item in entry.get("keywords", [])
@@ -173,23 +166,9 @@ def _load_index(icons_dir: Path) -> list[Pictogram]:
                     [str(value) for value in [*entry.get("tags", []), *entry.get("categories", [])]]
                 )
             )
-            desc = desc_by_id.get(pic_id) or _first_keyword(entry) or Path(file).stem
+            desc = _first_keyword(entry) or Path(file).stem
             pics.append(Pictogram(file, desc, keywords, extra, pic_id))
-        for file in files:
-            if file in seen:
-                continue
-            match = re.match(r"^(\d+)_(.*)\.png$", file)
-            pic_id = int(match.group(1)) if match else None
-            desc = match.group(2).replace("_", " ") if match else file
-            pics.append(Pictogram(file, desc, pic_id=pic_id))
-    else:
-        for file in files:
-            match = re.match(r"^(\d+)_(.*)\.png$", file)
-            pic_id = int(match.group(1)) if match else None
-            desc = match.group(2).replace("_", " ") if match else file
-            pics.append(Pictogram(file, desc, pic_id=pic_id))
 
-    pics.extend(unindexed)
     _INDEX_CACHE[key] = pics
     return pics
 
@@ -224,6 +203,8 @@ class Catalog:
         self._pics = _load_index(self.icons_dir)
         self._counts: dict[str, int] | None = None
         self._by_id: dict[int, Pictogram] | None = None
+        self._desc_text: dict[int, DescriptionRecord] = load_descriptions(self.icons_dir)
+        self._local_files: dict[Path, dict[int, list[str]]] = {}
 
     # -- indexing ----------------------------------------------------------
 
@@ -277,7 +258,15 @@ class Catalog:
         tokens = _tokenize(query)
         if not tokens:
             return []
-        scored = [SearchHit(pic, _score(pic, tokens)) for pic in self._pics]
+        scored = [
+            SearchHit(
+                pic,
+                _score(
+                    pic, tokens, self._desc_text.get(pic.pic_id) if pic.pic_id is not None else None
+                ),
+            )
+            for pic in self._pics
+        ]
         scored = [hit for hit in scored if hit.value > 0]
         return self._dedupe_by_label(scored)[: max(1, min(limit, 100))]
 
@@ -360,29 +349,61 @@ class Catalog:
         """Resolve a word to a local file path, fetching it if needed."""
         return self.ensure(self.resolve(word))
 
-    def _search_paths(self, pic: Pictogram) -> list[Path]:
-        """Local locations to look for ``pic``, cache first."""
-        paths: list[Path] = []
+    def _id_files(self, base: Path) -> dict[int, list[str]]:
+        """Local PNG names per ARASAAC id, found by id prefix only.
+
+        This is display bookkeeping — a local ``<id>_*.png`` may always be
+        rendered — and never influences search or resolution.
+        """
+        cached = self._local_files.get(base)
+        if cached is not None:
+            return cached
+        by_id: dict[int, list[str]] = {}
+        try:
+            for name in os.listdir(base):
+                if not name.endswith(".png"):
+                    continue
+                match = re.match(r"^(\d+)_", name)
+                if match:
+                    by_id.setdefault(int(match.group(1)), []).append(name)
+        except FileNotFoundError:
+            pass
+        self._local_files[base] = by_id
+        return by_id
+
+    def _locate(self, pic: Pictogram) -> Path | None:
+        """Local path to ``pic`` if one exists (cache dir first).
+
+        The files are addressed by ARASAAC id — the descriptive part of a
+        local filename is irrelevant for display.
+        """
         for base in (self.cache_dir, self.icons_dir):
             if base is None:
                 continue
+            if pic.pic_id is not None:
+                for name in self._id_files(base).get(pic.pic_id, []):
+                    path = base / name
+                    if path.is_file():
+                        return path
             path = base / pic.file
-            if path not in paths:
-                paths.append(path)
-        return paths
+            if path.is_file():
+                return path
+        return None
 
     def ensure(self, pic: Pictogram) -> Path:
         """Return a local path to ``pic``, downloading it when allowed.
 
-        A local file always wins.  When it is missing and ``fetch_missing`` is
-        on, the PNG is fetched from ARASAAC into ``cache_dir`` (or the icons
-        directory) and cached for the next call.  Otherwise a
-        :class:`FileNotFoundError` is raised — callers never render a
-        placeholder, because a wrong icon is worse than none.
+        Addressing is purely id-based: an existing local ``<id>_*.png`` (cache
+        directory first) is used for whatever name it carries; when it is
+        missing and ``fetch_missing`` is on, the PNG is fetched from ARASAAC
+        **by id** into ``cache_dir`` (or the icons directory) and cached for
+        the next call.  Otherwise a :class:`FileNotFoundError` is raised —
+        callers never render a placeholder, because a wrong icon is worse
+        than none.  The pictogram set itself is never a retrieval source.
         """
-        for path in self._search_paths(pic):
-            if path.is_file():
-                return path
+        located = self._locate(pic)
+        if located is not None:
+            return located
 
         if not self.fetch_missing:
             raise FileNotFoundError(
